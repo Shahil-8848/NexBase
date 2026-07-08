@@ -1,0 +1,310 @@
+import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
+import {
+  Trophy, Wallet, TrendingUp, DollarSign,
+  ArrowRight, ExternalLink, Plus, Shield,
+} from 'lucide-react'
+import { useAuthContext } from '@/app/auth-context'
+import { useSolanaWallet } from '@/hooks/use-wallet'
+import { tournamentService } from '@/services/tournament.service'
+import { transactionService } from '@/services/transaction.service'
+import { StatCard } from '@/components/shared/stat-card'
+import { PageHeader } from '@/components/shared/page-header'
+import { WalletBadge } from '@/components/shared/wallet-badge'
+import { TournamentStatusBadge } from '@/components/shared/tournament-status-badge'
+import { EmptyState } from '@/components/shared/empty-state'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
+import { formatSOL, formatRelative } from '@/utils/format'
+import { truncateAddress } from '@/lib/utils'
+
+export function DashboardPage() {
+  const { profile, isOrganizer } = useAuthContext()
+  const { connected, address } = useSolanaWallet()
+
+  const { data: tournamentsData, isLoading: toursLoading } = useQuery({
+    queryKey: ['tournaments', 'listing', { status: 'registration', page: 1 }],
+    queryFn: () => tournamentService.getTournaments({ status: 'registration', page: 1, sortBy: 'created_at', sortOrder: 'desc' }),
+  })
+
+  const { data: activeTournaments } = useQuery({
+    queryKey: ['tournaments', 'listing', { status: 'active', page: 1 }],
+    queryFn: () => tournamentService.getTournaments({ status: 'active', page: 1 }),
+  })
+
+  const { data: transactions, isLoading: txLoading } = useQuery({
+    queryKey: ['transactions', profile?.id],
+    queryFn: () => transactionService.getUserTransactions(profile!.id),
+    enabled: !!profile?.id,
+  })
+
+  const { data: organizerTours, isLoading: orgToursLoading } = useQuery({
+    queryKey: ['organizer-tournaments', profile?.id],
+    queryFn: () => tournamentService.getOrganizerTournaments(profile!.id),
+    enabled: !!profile?.id && isOrganizer,
+  })
+
+  const totalEarnings = (transactions ?? [])
+    .filter((t) => t.type === 'prize' && t.status === 'confirmed')
+    .reduce((sum, t) => sum + Number(t.amount), 0)
+
+  const totalSpent = (transactions ?? [])
+    .filter((t) => t.type === 'entry_fee' && t.status === 'confirmed')
+    .reduce((sum, t) => sum + Number(t.amount), 0)
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={`Welcome back, ${profile?.username ?? 'Player'}`}
+        description="Here's what's happening on ChainArena today."
+        actions={
+          isOrganizer ? (
+            <Link to="/organizer/create">
+              <Button size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
+                New Tournament
+              </Button>
+            </Link>
+          ) : (
+            <Link to="/tournaments">
+              <Button size="sm" className="gap-2">
+                <Trophy className="h-4 w-4" />
+                Browse Tournaments
+              </Button>
+            </Link>
+          )
+        }
+      />
+
+      {/* Wallet connect banner */}
+      {!connected && (
+        <Card className="border-brand/30 bg-brand/5">
+          <CardContent className="flex items-center justify-between p-4 gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-brand/20">
+                <Shield className="h-5 w-5 text-brand-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Connect your Phantom wallet</p>
+                <p className="text-xs text-muted-foreground">Required to join tournaments and receive prizes</p>
+              </div>
+            </div>
+            <WalletMultiButton style={{
+              background: '#9FD347',
+              color: '#111827',
+              borderRadius: '6px',
+              height: '36px',
+              fontSize: '13px',
+              fontWeight: 600,
+              padding: '0 16px',
+              border: 'none',
+            }} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          label="Total Earnings"
+          value={formatSOL(totalEarnings)}
+          trend="up"
+          icon={<DollarSign className="h-5 w-5 text-green-600" />}
+          iconBg="bg-green-50"
+          loading={txLoading}
+        />
+        <StatCard
+          label="Entry Fees Paid"
+          value={formatSOL(totalSpent)}
+          icon={<Wallet className="h-5 w-5 text-blue-500" />}
+          iconBg="bg-blue-50"
+          loading={txLoading}
+        />
+        <StatCard
+          label="Open Tournaments"
+          value={tournamentsData?.total ?? 0}
+          icon={<Trophy className="h-5 w-5 text-brand-600" />}
+          iconBg="bg-brand/10"
+          loading={toursLoading}
+        />
+        <StatCard
+          label={isOrganizer ? 'My Tournaments' : 'Trust Score'}
+          value={isOrganizer ? (organizerTours?.length ?? 0) : profile?.trust_score ?? 0}
+          icon={<TrendingUp className="h-5 w-5 text-purple-500" />}
+          iconBg="bg-purple-50"
+          loading={isOrganizer ? orgToursLoading : false}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Wallet card */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Wallet Status</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <WalletBadge address={profile?.wallet_address ?? address} showAddress />
+            {connected && address && (
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Address</span>
+                  <span className="font-mono text-xs">{truncateAddress(address, 6)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Network</span>
+                  <Badge variant="info" className="text-xs">Devnet</Badge>
+                </div>
+              </div>
+            )}
+            {!connected && (
+              <p className="text-xs text-muted-foreground">
+                Connect your wallet to participate in tournaments and receive prizes on Solana.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Upcoming tournaments */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Open Registration</CardTitle>
+            <Link to="/tournaments" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+              View all <ArrowRight className="h-3 w-3" />
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {toursLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-lg" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3.5 w-40" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                    <Skeleton className="h-7 w-16 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            ) : !tournamentsData?.data.length ? (
+              <EmptyState
+                icon={<Trophy className="h-8 w-8" />}
+                title="No open tournaments"
+                description="Check back soon for new competitions"
+              />
+            ) : (
+              <div className="divide-y -mx-6">
+                {tournamentsData.data.slice(0, 4).map((t) => (
+                  <Link
+                    key={t.id}
+                    to={`/tournaments/${t.id}`}
+                    className="flex items-center gap-4 px-6 py-3 hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-lg shrink-0">
+                      🎮
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{t.title}</p>
+                      <p className="text-xs text-muted-foreground">{t.game} · {t.current_players}/{t.max_players} players</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold">{formatSOL(t.entry_fee)}</p>
+                      <p className="text-xs text-muted-foreground">entry</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Transactions */}
+      <Card>
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Recent Transactions</CardTitle>
+          <Link to="/transactions" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+            View all <ArrowRight className="h-3 w-3" />
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {txLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-3.5 w-32" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                  <Skeleton className="h-5 w-20" />
+                </div>
+              ))}
+            </div>
+          ) : !(transactions?.length) ? (
+            <EmptyState
+              icon={<Wallet className="h-8 w-8" />}
+              title="No transactions yet"
+              description="Your on-chain transactions will appear here"
+            />
+          ) : (
+            <div className="divide-y -mx-6">
+              {transactions.slice(0, 5).map((tx) => (
+                <div key={tx.id} className="flex items-center justify-between px-6 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${tx.type === 'prize' ? 'bg-green-100' : 'bg-blue-100'}`}>
+                      {tx.type === 'prize' ? '🏆' : '💸'}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium capitalize">{tx.type.replace('_', ' ')}</p>
+                      <p className="text-xs text-muted-foreground">{formatRelative(tx.created_at)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-sm font-semibold ${tx.type === 'prize' ? 'text-green-600' : ''}`}>
+                      {tx.type === 'prize' ? '+' : '-'}{formatSOL(Number(tx.amount))}
+                    </span>
+                    <a href={tx.explorer_url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Active Tournaments */}
+      {(activeTournaments?.data.length ?? 0) > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Live Now</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {activeTournaments!.data.slice(0, 4).map((t) => (
+                <Link
+                  key={t.id}
+                  to={`/tournaments/${t.id}`}
+                  className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-brand/10 flex items-center justify-center">
+                    <Trophy className="h-4 w-4 text-brand-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{t.title}</p>
+                    <p className="text-xs text-muted-foreground">{t.game}</p>
+                  </div>
+                  <TournamentStatusBadge status={t.tournament_status} />
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
