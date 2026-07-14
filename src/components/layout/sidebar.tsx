@@ -8,6 +8,7 @@ import {
   Sword,
   PlusCircle,
   ChevronRight,
+  ArrowLeftRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthContext } from '@/app/auth-context'
@@ -19,6 +20,7 @@ const playerNav = [
   { to: '/tournaments', label: 'Tournaments', icon: Trophy },
   { to: '/leaderboard', label: 'Leaderboard', icon: BarChart3 },
   { to: '/transactions', label: 'Transactions', icon: Receipt },
+  { to: '/swap', label: 'Token Swap', icon: ArrowLeftRight },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -29,6 +31,7 @@ const organizerNav = [
   { to: '/tournaments', label: 'Browse', icon: Trophy },
   { to: '/leaderboard', label: 'Leaderboard', icon: BarChart3 },
   { to: '/transactions', label: 'Transactions', icon: Receipt },
+  { to: '/swap', label: 'Token Swap', icon: ArrowLeftRight },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
