@@ -1,4 +1,4 @@
-export const APP_NAME = 'ChainArena'
+export const APP_NAME = 'NexBase'
 export const APP_TAGLINE = 'Competitive Esports powered by Solana'
 
 export const SOLANA_NETWORK = (import.meta.env.VITE_SOLANA_NETWORK as string) || 'devnet'

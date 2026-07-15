@@ -81,11 +81,11 @@ export function DashboardPage() {
 
       {/* Wallet connect banner */}
       {!connected && (
-        <Card className="border-brand/30 bg-brand/5">
+        <Card className="border-primary/20 bg-primary/5">
           <CardContent className="flex items-center justify-between p-4 gap-4 flex-wrap">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-brand/20">
-                <Shield className="h-5 w-5 text-brand-600" />
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Shield className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <p className="font-semibold text-sm">Connect your Phantom wallet</p>
@@ -93,8 +93,8 @@ export function DashboardPage() {
               </div>
             </div>
             <WalletMultiButton style={{
-              background: '#9FD347',
-              color: '#111827',
+              background: 'hsl(var(--primary))',
+              color: 'white',
               borderRadius: '6px',
               height: '36px',
               fontSize: '13px',
@@ -112,29 +112,29 @@ export function DashboardPage() {
           label="Total Earnings"
           value={formatSOL(totalEarnings)}
           trend="up"
-          icon={<DollarSign className="h-5 w-5 text-green-600" />}
-          iconBg="bg-green-50"
+          icon={<DollarSign className="h-5 w-5 text-green-500" />}
+          iconBg="bg-green-500/10"
           loading={txLoading}
         />
         <StatCard
           label="Entry Fees Paid"
           value={formatSOL(totalSpent)}
           icon={<Wallet className="h-5 w-5 text-blue-500" />}
-          iconBg="bg-blue-50"
+          iconBg="bg-blue-500/10"
           loading={txLoading}
         />
         <StatCard
           label="Open Tournaments"
           value={tournamentsData?.total ?? 0}
-          icon={<Trophy className="h-5 w-5 text-brand-600" />}
-          iconBg="bg-brand/10"
+          icon={<Trophy className="h-5 w-5 text-primary" />}
+          iconBg="bg-primary/10"
           loading={toursLoading}
         />
         <StatCard
           label={isOrganizer ? 'My Tournaments' : 'Trust Score'}
           value={isOrganizer ? (organizerTours?.length ?? 0) : profile?.trust_score ?? 0}
           icon={<TrendingUp className="h-5 w-5 text-purple-500" />}
-          iconBg="bg-purple-50"
+          iconBg="bg-purple-500/10"
           loading={isOrganizer ? orgToursLoading : false}
         />
       </div>
@@ -254,7 +254,7 @@ export function DashboardPage() {
               {transactions.slice(0, 5).map((tx) => (
                 <div key={tx.id} className="flex items-center justify-between px-6 py-3">
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${tx.type === 'prize' ? 'bg-green-100' : 'bg-blue-100'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${tx.type === 'prize' ? 'bg-green-500/10 text-green-500' : 'bg-blue-500/10 text-blue-500'}`}>
                       {tx.type === 'prize' ? '🏆' : '💸'}
                     </div>
                     <div>
@@ -263,7 +263,7 @@ export function DashboardPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className={`text-sm font-semibold ${tx.type === 'prize' ? 'text-green-600' : ''}`}>
+                    <span className={`text-sm font-semibold ${tx.type === 'prize' ? 'text-green-500' : ''}`}>
                       {tx.type === 'prize' ? '+' : '-'}{formatSOL(Number(tx.amount))}
                     </span>
                     <a href={tx.explorer_url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
@@ -291,8 +291,8 @@ export function DashboardPage() {
                   to={`/tournaments/${t.id}`}
                   className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
                 >
-                  <div className="w-9 h-9 rounded-lg bg-brand/10 flex items-center justify-center">
-                    <Trophy className="h-4 w-4 text-brand-600" />
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Trophy className="h-4 w-4 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{t.title}</p>

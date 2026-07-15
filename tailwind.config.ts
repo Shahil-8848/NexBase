@@ -75,6 +75,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['Oxanium', 'sans-serif'],
       },
       keyframes: {
         'accordion-down': {

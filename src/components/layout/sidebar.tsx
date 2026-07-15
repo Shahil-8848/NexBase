@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { useAuthContext } from '@/app/auth-context'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
+import logoImg from '@/assets/NexBaseLogo.png'
 
 const playerNav = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -44,10 +45,8 @@ export function Sidebar() {
     <aside className="hidden lg:flex w-60 flex-col border-r bg-card h-full">
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-6 py-5 border-b">
-        <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center">
-          <Sword className="w-4 h-4 text-white" strokeWidth={2.5} />
-        </div>
-        <span className="font-bold text-lg tracking-tight">ChainArena</span>
+        <img src={logoImg} alt="NexBase Logo" className="w-8 h-8 rounded-lg object-cover shadow-sm" />
+        <span className="font-bold text-lg tracking-tight font-display text-foreground">NexBase</span>
       </div>
 
       <ScrollArea className="flex-1 py-4">
@@ -63,15 +62,15 @@ export function Sidebar() {
                 key={to}
                 to={to}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all relative',
                   isActive
-                    ? 'bg-brand/10 text-brand-600 font-semibold'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    ? 'bg-secondary text-primary font-semibold border-l-2 border-primary pl-2.5 rounded-l-none'
+                    : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
                 )}
               >
                 <Icon className="w-4 h-4 shrink-0" />
                 <span>{label}</span>
-                {isActive && <ChevronRight className="w-3 h-3 ml-auto opacity-60" />}
+                {isActive && <ChevronRight className="w-3 h-3 ml-auto opacity-60 text-primary" />}
               </NavLink>
             )
           })}
@@ -83,17 +82,17 @@ export function Sidebar() {
         {profile && (
           <NavLink
             to={`/profile/${profile.id}`}
-            className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-muted transition-colors"
+            className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-secondary/50 transition-colors"
           >
-            <div className="w-7 h-7 rounded-full bg-brand/20 flex items-center justify-center text-xs font-bold text-brand-700">
+            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
               {profile.username.slice(0, 2).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{profile.username}</p>
-              <p className="text-xs text-muted-foreground capitalize">{profile.role}</p>
+              <p className="text-xs text-muted-foreground truncate capitalize">{profile.role}</p>
             </div>
             {isOrganizer && (
-              <Badge variant="brand" className="text-xs shrink-0">Pro</Badge>
+              <Badge variant="destructive" className="text-[10px] uppercase font-bold shrink-0 bg-primary/20 text-primary hover:bg-primary/20 border-none px-1.5 py-0.5">Pro</Badge>
             )}
           </NavLink>
         )}

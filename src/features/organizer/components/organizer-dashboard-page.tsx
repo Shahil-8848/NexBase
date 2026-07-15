@@ -89,11 +89,11 @@ export function OrganizerDashboardPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard label="Total Tournaments" value={stats.total} icon={<Trophy className="h-5 w-5 text-brand-600" />} iconBg="bg-brand/10" loading={isLoading} />
-        <StatCard label="Active Now" value={stats.active} icon={<BarChart3 className="h-5 w-5 text-blue-500" />} iconBg="bg-blue-50" loading={isLoading} />
-        <StatCard label="Total Players" value={stats.totalPlayers} icon={<Users className="h-5 w-5 text-purple-500" />} iconBg="bg-purple-50" loading={isLoading} />
-        <StatCard label="Total Prize Pool" value={formatSOL(stats.totalPrize)} icon={<DollarSign className="h-5 w-5 text-green-600" />} iconBg="bg-green-50" loading={isLoading} />
-        <StatCard label="Total Collected Fees" value={formatSOL(stats.totalCollectedFees)} icon={<DollarSign className="h-5 w-5 text-amber-600" />} iconBg="bg-amber-50" loading={isLoading} />
+        <StatCard label="Total Tournaments" value={stats.total} icon={<Trophy className="h-5 w-5 text-primary" />} iconBg="bg-primary/10" loading={isLoading} />
+        <StatCard label="Active Now" value={stats.active} icon={<BarChart3 className="h-5 w-5 text-blue-500" />} iconBg="bg-blue-500/10" loading={isLoading} />
+        <StatCard label="Total Players" value={stats.totalPlayers} icon={<Users className="h-5 w-5 text-purple-500" />} iconBg="bg-purple-500/10" loading={isLoading} />
+        <StatCard label="Total Prize Pool" value={formatSOL(stats.totalPrize)} icon={<DollarSign className="h-5 w-5 text-green-500" />} iconBg="bg-green-500/10" loading={isLoading} />
+        <StatCard label="Total Collected Fees" value={formatSOL(stats.totalCollectedFees)} icon={<DollarSign className="h-5 w-5 text-amber-500" />} iconBg="bg-amber-500/10" loading={isLoading} />
       </div>
 
       {/* Tournaments list */}
@@ -156,7 +156,7 @@ export function OrganizerDashboardPage() {
                       <span className="font-medium">{t.current_players}</span>
                       <span className="text-muted-foreground">/{t.max_players}</span>
                     </td>
-                    <td className="px-4 py-3 text-right hidden lg:table-cell font-medium text-brand-700">
+                    <td className="px-4 py-3 text-right hidden lg:table-cell font-semibold text-primary">
                       {formatSOL(t.prize_pool)}
                     </td>
                     <td className="px-4 py-3 text-right text-muted-foreground text-xs hidden lg:table-cell">

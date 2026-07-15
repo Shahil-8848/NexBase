@@ -7,6 +7,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAuthContext } from '@/app/auth-context'
 import { Button } from '@/components/ui/button'
+import logoImg from '@/assets/NexBaseLogo.png'
 
 interface MobileSidebarProps {
   open: boolean
@@ -56,10 +57,8 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
       <div className="fixed inset-y-0 left-0 z-50 w-64 bg-card border-r flex flex-col lg:hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-brand flex items-center justify-center">
-              <Sword className="w-4 h-4 text-white" strokeWidth={2.5} />
-            </div>
-            <span className="font-bold tracking-tight">ChainArena</span>
+            <img src={logoImg} alt="NexBase Logo" className="w-7 h-7 rounded-lg object-cover shadow-sm" />
+            <span className="font-bold tracking-tight font-display text-foreground">NexBase</span>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
             <X className="h-4 w-4" />
@@ -78,14 +77,14 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
                 key={to}
                 to={to}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all relative',
                   isActive
-                    ? 'bg-brand/10 text-brand-600 font-semibold'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    ? 'bg-secondary text-primary font-semibold border-l-2 border-primary pl-2.5 rounded-l-none'
+                    : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
                 )}
               >
-                <Icon className="w-4 h-4" />
-                {label}
+                <Icon className="w-4 h-4 shrink-0" />
+                <span>{label}</span>
               </NavLink>
             )
           })}

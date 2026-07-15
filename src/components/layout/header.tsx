@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, LogOut, User, Settings, Wallet, Menu } from 'lucide-react'
+import { Bell, LogOut, User, Settings, Wallet, Menu, Sun, Moon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -18,6 +18,7 @@ import { useSolanaWallet } from '@/hooks/use-wallet'
 import { truncateAddress } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
+import { useTheme } from '@/app/theme-provider'
 
 interface HeaderProps {
   onMenuToggle?: () => void
@@ -27,6 +28,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const navigate = useNavigate()
   const { profile, user, refreshProfile } = useAuthContext()
   const { connected, address, disconnect } = useSolanaWallet()
+  const { theme, toggleTheme } = useTheme()
 
   useEffect(() => {
     if (profile && connected && address && profile.wallet_address !== address) {
@@ -126,6 +128,20 @@ export function Header({ onMenuToggle }: HeaderProps) {
             <DropdownMenuItem onClick={() => navigate('/settings?tab=wallet')}>
               <Wallet className="mr-2 h-4 w-4" />
               Wallet
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={toggleTheme}>
+              {theme === 'dark' ? (
+                <>
+                  <Sun className="mr-2 h-4 w-4" />
+                  Light Mode
+                </>
+              ) : (
+                <>
+                  <Moon className="mr-2 h-4 w-4" />
+                  Dark Mode
+                </>
+              )}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut} className="text-destructive">

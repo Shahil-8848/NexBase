@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Oxanium:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,48 +6,48 @@
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 220 14% 7%;
+    --background: 220 20% 97%;
+    --foreground: 220 20% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 220 14% 7%;
+    --card-foreground: 220 20% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 14% 7%;
-    --primary: 87 64% 56%;
-    --primary-foreground: 220 14% 7%;
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 220 14% 7%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
-    --accent: 220 14% 96%;
-    --accent-foreground: 220 14% 7%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 87 64% 56%;
+    --popover-foreground: 220 20% 10%;
+    --primary: 353 100% 55%; /* Riot Red */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 15% 90%;
+    --secondary-foreground: 220 20% 10%;
+    --muted: 220 15% 92%;
+    --muted-foreground: 220 10% 40%;
+    --accent: 220 15% 90%;
+    --accent-foreground: 220 20% 10%;
+    --destructive: 353 100% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 15% 85%;
+    --input: 220 15% 85%;
+    --ring: 353 100% 55%;
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 222 47% 6%;
+    --background: 220 12% 8%; /* Discord slate dark: #111214 */
     --foreground: 210 40% 98%;
-    --card: 222 47% 8%;
+    --card: 220 10% 12%; /* Discord card background: #1d1f22 */
     --card-foreground: 210 40% 98%;
-    --popover: 222 47% 8%;
+    --popover: 220 12% 10%; /* Discord popover background */
     --popover-foreground: 210 40% 98%;
-    --primary: 87 64% 56%;
-    --primary-foreground: 220 14% 7%;
-    --secondary: 217 33% 12%;
+    --primary: 353 100% 60%; /* Riot Games Red: #ff4655 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 8% 18%; /* Discord secondary containers: #2b2d31 */
     --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 12%;
-    --muted-foreground: 215 20% 55%;
-    --accent: 217 33% 12%;
+    --muted: 220 8% 15%;
+    --muted-foreground: 215 15% 65%;
+    --accent: 220 8% 18%;
     --accent-foreground: 210 40% 98%;
-    --destructive: 0 63% 51%;
+    --destructive: 353 100% 50%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 14%;
-    --input: 217 33% 14%;
-    --ring: 87 64% 56%;
+    --border: 220 8% 16%; /* Discord thin borders: #232428 */
+    --input: 220 8% 16%;
+    --ring: 353 100% 60%;
   }
 }
 
@@ -59,7 +59,7 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold tracking-tight;
+    @apply font-display font-bold tracking-wide;
   }
 }
 
