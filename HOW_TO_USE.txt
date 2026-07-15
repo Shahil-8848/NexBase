@@ -1,0 +1,13 @@
+HOW TO TEST & USE NEXBASE (SOLANA DEVNET TESTING)
+
+NexBase is fully integrated with the Solana blockchain. To test and explore the entire flow (creating tournaments, registering players/squads, paying entry fees, disputing matches, and distributing prizes), please note that the platform is currently configured to run on Solana Devnet (Test Network). 
+
+To interact with the payment and payout mechanisms, you must configure your Phantom Wallet to Devnet:
+
+1. Open your Phantom Wallet browser extension.
+2. Click the Settings gear icon in the bottom right corner.
+3. Scroll down and select "Developer Settings".
+4. Toggle "Testnet Mode" ON and select "Solana Devnet" from the list of network options.
+5. Obtain free testing SOL tokens by visiting a Solana Devnet Faucet (e.g., https://faucet.solana.com/) and requesting tokens to your connected wallet address.
+
+Once your wallet is in Devnet mode and funded with test SOL, you can create team or solo tournaments, execute secure escrow registrations, and handle decentralized payouts seamlessly without spending real funds.

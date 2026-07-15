@@ -64,6 +64,7 @@ export function Sidebar() {
               <NavLink
                 key={to}
                 to={to}
+                id={`tour-${label.toLowerCase().replace(/\s+/g, '-')}-link`}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all relative',
                   isActive

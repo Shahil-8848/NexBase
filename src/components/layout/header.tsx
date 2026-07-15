@@ -71,13 +71,13 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
       <div className="flex items-center gap-2">
         {/* Wallet status */}
-        {connected && address ? (
-          <Badge variant="success" className="hidden sm:flex items-center gap-1.5 px-3 py-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            {truncateAddress(address)}
-          </Badge>
-        ) : (
-          <div className="hidden sm:block">
+        <div id="tour-wallet-button" className="hidden sm:block">
+          {connected && address ? (
+            <Badge variant="success" className="flex items-center gap-1.5 px-3 py-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              {truncateAddress(address)}
+            </Badge>
+          ) : (
             <WalletMultiButton
               style={{
                 background: 'transparent',
@@ -90,8 +90,8 @@ export function Header({ onMenuToggle }: HeaderProps) {
                 padding: '0 12px',
               }}
             />
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Notifications placeholder */}
         <Button variant="ghost" size="icon" aria-label="Notifications">

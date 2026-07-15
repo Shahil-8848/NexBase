@@ -4,6 +4,7 @@ import { Sidebar } from './sidebar'
 import { Header } from './header'
 import { MobileSidebar } from './mobile-sidebar'
 import { Toaster } from '@/components/ui/toaster'
+import { OnboardingTour } from '@/components/shared/onboarding-tour'
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -27,6 +28,7 @@ export function AppShell() {
       </div>
 
       <Toaster />
+      <OnboardingTour />
     </div>
   )
 }
