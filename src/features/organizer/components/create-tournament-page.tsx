@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide-react'
 import { tournamentService } from '@/services/tournament.service'
 import { useAuthContext } from '@/app/auth-context'
 import { useSolanaWallet } from '@/hooks/use-wallet'
+import { getTournamentVaultKeypair } from '@/lib/escrow-utils'
 import { toast } from '@/hooks/use-toast'
 import { PageHeader } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
@@ -22,6 +23,7 @@ const schema = z.object({
   description: z.string().max(1000).optional(),
   game: z.string().min(1, 'Select a game'),
   entry_fee: z.coerce.number().min(0, 'Entry fee cannot be negative'),
+  token_type: z.enum(['SOL', 'USDC']).default('SOL'),
   prize_pool: z.coerce.number().min(0, 'Prize pool cannot be negative'),
   max_players: z.coerce.number().min(2).max(256),
   start_date: z.string().optional(),
@@ -46,22 +48,29 @@ export function CreateTournamentPage() {
     defaultValues: {
       max_players: 16,
       entry_fee: 0,
+      token_type: 'SOL',
       prize_pool: 0,
       organizer_wallet: address ?? profile?.wallet_address ?? '',
     },
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: FormData) =>
-      tournamentService.createTournament(profile!.id, {
+    mutationFn: async (data: FormData) => {
+      const tournamentId = crypto.randomUUID()
+      const vaultKey = await getTournamentVaultKeypair(tournamentId)
+      
+      return tournamentService.createTournament(profile!.id, {
+        id: tournamentId,
         ...data,
+        vault_address: vaultKey.publicKey.toBase58(),
         description: data.description || undefined,
         rules: data.rules || undefined,
         banner: data.banner || undefined,
         organizer_wallet: data.organizer_wallet || undefined,
         start_date: data.start_date || undefined,
         end_date: data.end_date || undefined,
-      }),
+      })
+    },
     onSuccess: (tournament) => {
       toast({ title: 'Tournament created!', description: 'You can now manage it from your dashboard.' })
       queryClient.invalidateQueries({ queryKey: ['organizer-tournaments', profile?.id] })
@@ -118,13 +127,22 @@ export function CreateTournamentPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <Label>Entry Fee (SOL)</Label>
-                <Input type="number" step="0.0001" min="0" placeholder="0" {...register('entry_fee')} />
+                <Label>Entry Fee</Label>
+                <div className="flex gap-2">
+                  <Input type="number" className="flex-1" step="0.0001" min="0" placeholder="0" {...register('entry_fee')} />
+                  <Select defaultValue="SOL" onValueChange={(v) => setValue('token_type', v as 'SOL' | 'USDC')}>
+                    <SelectTrigger className="w-[90px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="SOL">SOL</SelectItem>
+                      <SelectItem value="USDC">USDC</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 {errors.entry_fee && <p className="text-xs text-destructive">{errors.entry_fee.message}</p>}
                 <p className="text-xs text-muted-foreground">Set 0 for a free tournament</p>
               </div>
               <div className="space-y-1.5">
-                <Label>Base Prize Pool (SOL)</Label>
+                <Label>Base Prize Pool</Label>
                 <Input type="number" step="0.0001" min="0" placeholder="0" {...register('prize_pool')} />
                 {errors.prize_pool && <p className="text-xs text-destructive">{errors.prize_pool.message}</p>}
                 <p className="text-xs text-muted-foreground">Initial sponsored amount</p>

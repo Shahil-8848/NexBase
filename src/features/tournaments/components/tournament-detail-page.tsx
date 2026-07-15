@@ -4,18 +4,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Trophy, Users, Calendar, Wallet, ExternalLink,
   CheckCircle2, Clock, Copy, ArrowLeft,
-  Shield,
+  Shield, AlertTriangle, Vote as VoteIcon
 } from 'lucide-react'
 import { tournamentService } from '@/services/tournament.service'
 import { transactionService } from '@/services/transaction.service'
 import { solanaService } from '@/services/solana.service'
 import { useAuthContext } from '@/app/auth-context'
 import { useSolanaWallet } from '@/hooks/use-wallet'
+import { governanceService, Dispute, Vote } from '@/services/governance.service'
 import { toast } from '@/hooks/use-toast'
 import { TournamentStatusBadge, PaymentStatusBadge } from '@/components/shared/tournament-status-badge'
 import { EmptyState } from '@/components/shared/empty-state'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -24,21 +25,28 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Textarea } from '@/components/ui/textarea'
 import { formatSOL, formatDateTime } from '@/utils/format'
 import { truncateAddress, getSolanaExplorerUrl } from '@/lib/utils'
 import { BracketView } from './bracket-view'
+import { USDC_MINT } from '@/constants'
 
 export function TournamentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { profile } = useAuthContext()
-  const { connected, sendPayment } = useSolanaWallet()
+  const { connected, sendPayment, wallet } = useSolanaWallet()
   const queryClient = useQueryClient()
 
   const [joinDialogOpen, setJoinDialogOpen] = useState(false)
   const [payStep, setPayStep] = useState<'info' | 'paying' | 'signature' | 'verifying' | 'done'>('info')
   const [txSignature, setTxSignature] = useState('')
   const [manualSignature, setManualSignature] = useState('')
+
+  // Dispute state
+  const [disputeDialogOpen, setDisputeDialogOpen] = useState(false)
+  const [disputeMatchId, setDisputeMatchId] = useState('')
+  const [disputeReason, setDisputeReason] = useState('')
 
   const { data: tournament, isLoading } = useQuery({
     queryKey: ['tournament', id],
@@ -83,13 +91,14 @@ export function TournamentDetailPage() {
 
   // Pay with wallet
   const handlePayWithWallet = async () => {
-    if (!tournament?.organizer_wallet) {
-      toast({ title: 'No organizer wallet configured', variant: 'destructive' })
+    const paymentDest = tournament?.vault_address || tournament?.organizer_wallet
+    if (!paymentDest) {
+      toast({ title: 'No payment destination configured', variant: 'destructive' })
       return
     }
     setPayStep('paying')
     try {
-      const sig = await sendPayment(tournament.organizer_wallet, tournament.entry_fee)
+      const sig = await sendPayment(paymentDest, tournament.entry_fee, tournament.token_type)
       setTxSignature(sig)
       await handleSubmitSignature(sig)
     } catch (err) {
@@ -103,11 +112,13 @@ export function TournamentDetailPage() {
     const p = participation ?? joinMutation.data!
     setPayStep('verifying')
     try {
-      // Verify on-chain
+      // Verify on-chain (using USDC mint address if token is USDC)
+      const paymentDest = tournament!.vault_address || tournament!.organizer_wallet!
       const verified = await solanaService.verifyTransaction(
         sig,
-        tournament!.organizer_wallet!,
-        tournament!.entry_fee
+        paymentDest,
+        tournament!.entry_fee,
+        tournament!.token_type === 'USDC' ? USDC_MINT : undefined
       )
 
       const status = verified?.confirmed ? 'verified' : 'pending'
@@ -127,7 +138,7 @@ export function TournamentDetailPage() {
           signature: sig,
           status: status === 'verified' ? 'confirmed' : 'pending',
           tournament_id: tournament!.id,
-          description: `Entry fee for ${tournament!.title}`,
+          description: `Entry fee for ${tournament!.title} (${tournament!.token_type})`,
         })
       }
 
@@ -137,7 +148,7 @@ export function TournamentDetailPage() {
       toast({
         title: status === 'verified' ? 'Payment verified!' : 'Payment submitted',
         description: status === 'verified'
-          ? 'Your entry has been confirmed on Solana.'
+          ? `Your entry has been confirmed on Solana (${tournament!.token_type}).`
           : 'Your payment is pending verification.',
       })
     } catch (err) {
@@ -145,6 +156,23 @@ export function TournamentDetailPage() {
       setPayStep('signature')
     }
   }
+
+  // Dispute creation
+  const createDisputeMutation = useMutation({
+    mutationFn: async () => {
+      if (!profile) throw new Error('Not authenticated')
+      return governanceService.createDispute(disputeMatchId, id!, profile.id, disputeReason)
+    },
+    onSuccess: () => {
+      toast({ title: 'Dispute raised!', description: 'Match score is now locked for community review.' })
+      queryClient.invalidateQueries({ queryKey: ['matches', id] })
+      setDisputeDialogOpen(false)
+      setDisputeReason('')
+    },
+    onError: (err) => {
+      toast({ title: 'Dispute failed', description: (err as Error).message, variant: 'destructive' })
+    },
+  })
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
@@ -197,6 +225,7 @@ export function TournamentDetailPage() {
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="players">Players ({participants?.length ?? 0})</TabsTrigger>
               <TabsTrigger value="bracket">Bracket</TabsTrigger>
+              <TabsTrigger value="governance">Governance &amp; Disputes</TabsTrigger>
               {tournament.rules && <TabsTrigger value="rules">Rules</TabsTrigger>}
             </TabsList>
 
@@ -209,11 +238,32 @@ export function TournamentDetailPage() {
                 </Card>
               )}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <InfoTile icon={<Trophy className="h-4 w-4" />} label="Prize Pool" value={formatSOL(tournament.prize_pool)} highlight />
-                <InfoTile icon={<Wallet className="h-4 w-4" />} label="Entry Fee" value={tournament.entry_fee === 0 ? 'Free' : formatSOL(tournament.entry_fee)} />
+                <InfoTile icon={<Trophy className="h-4 w-4" />} label="Prize Pool" value={formatSOL(tournament.prize_pool, 2, tournament.token_type)} highlight />
+                <InfoTile icon={<Wallet className="h-4 w-4" />} label="Entry Fee" value={tournament.entry_fee === 0 ? 'Free' : formatSOL(tournament.entry_fee, 4, tournament.token_type)} />
                 <InfoTile icon={<Users className="h-4 w-4" />} label="Players" value={`${tournament.current_players}/${tournament.max_players}`} />
                 <InfoTile icon={<Calendar className="h-4 w-4" />} label="Slots Left" value={slots > 0 ? String(slots) : 'Full'} />
               </div>
+              
+              {/* Escrow Contract Address Tag */}
+              {tournament.vault_address && (
+                <Card className="border border-brand-100 bg-brand-50/20">
+                  <CardContent className="p-4 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-5 w-5 text-brand" />
+                      <div>
+                        <p className="text-xs font-semibold text-brand">Escrow Vault Active (On-Chain)</p>
+                        <p className="text-xs text-muted-foreground font-mono truncate max-w-[200px] sm:max-w-md">
+                          {tournament.vault_address}
+                        </p>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-brand" onClick={() => copyToClipboard(tournament.vault_address!)}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
               {tournament.start_date && (
                 <Card>
                   <CardContent className="p-4 flex items-center gap-3">
@@ -279,6 +329,20 @@ export function TournamentDetailPage() {
               <BracketView matches={matches ?? []} />
             </TabsContent>
 
+            <TabsContent value="governance" className="mt-4">
+              <GovernanceMatchesList
+                matches={matches ?? []}
+                tournamentId={id!}
+                isRegistered={isRegistered}
+                profileId={profile?.id}
+                wallet={wallet}
+                onDisputeTriggered={(matchId) => {
+                  setDisputeMatchId(matchId)
+                  setDisputeDialogOpen(true)
+                }}
+              />
+            </TabsContent>
+
             {tournament.rules && (
               <TabsContent value="rules" className="mt-4">
                 <Card>
@@ -324,11 +388,11 @@ export function TournamentDetailPage() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Entry Fee</span>
-                  <span className="font-semibold">{tournament.entry_fee === 0 ? 'Free' : formatSOL(tournament.entry_fee)}</span>
+                  <span className="font-semibold">{tournament.entry_fee === 0 ? 'Free' : formatSOL(tournament.entry_fee, 4, tournament.token_type)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Prize Pool</span>
-                  <span className="font-semibold text-brand-700">{formatSOL(tournament.prize_pool)}</span>
+                  <span className="font-semibold text-brand-700">{formatSOL(tournament.prize_pool, 2, tournament.token_type)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Slots</span>
@@ -358,19 +422,19 @@ export function TournamentDetailPage() {
                 </Button>
               )}
 
-              {/* Organizer wallet for reference */}
-              {tournament.organizer_wallet && (
+              {/* Escrow vault/wallet address */}
+              {tournament.vault_address && (
                 <div className="pt-1">
-                  <p className="text-xs text-muted-foreground mb-1">Organizer Wallet</p>
+                  <p className="text-xs text-muted-foreground mb-1">Escrow Vault Address</p>
                   <div className="flex items-center gap-2">
                     <code className="text-xs font-mono bg-muted px-2 py-1 rounded flex-1 truncate">
-                      {truncateAddress(tournament.organizer_wallet, 6)}
+                      {truncateAddress(tournament.vault_address, 6)}
                     </code>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={() => copyToClipboard(tournament.organizer_wallet!)}
+                      onClick={() => copyToClipboard(tournament.vault_address!)}
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </Button>
@@ -393,21 +457,39 @@ export function TournamentDetailPage() {
               </DialogHeader>
               <div className="space-y-3 py-2">
                 <div className="p-3 rounded-lg bg-muted/50 space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Entry Fee</span><span className="font-semibold">{formatSOL(tournament.entry_fee)}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Prize Pool</span><span className="font-semibold text-brand-700">{formatSOL(tournament.prize_pool)}</span></div>
-                  {tournament.organizer_wallet && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">Entry Fee</span><span className="font-semibold">{formatSOL(tournament.entry_fee, 4, tournament.token_type)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Prize Pool</span><span className="font-semibold text-brand-700">{formatSOL(tournament.prize_pool, 2, tournament.token_type)}</span></div>
+                  {tournament.vault_address && (
                     <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Pay to</span>
+                      <span className="text-muted-foreground">Held in Escrow PDA</span>
                       <div className="flex items-center gap-1">
-                        <code className="text-xs font-mono">{truncateAddress(tournament.organizer_wallet)}</code>
-                        <button onClick={() => copyToClipboard(tournament.organizer_wallet!)}><Copy className="h-3 w-3 text-muted-foreground" /></button>
+                        <code className="text-xs font-mono">{truncateAddress(tournament.vault_address)}</code>
+                        <button onClick={() => copyToClipboard(tournament.vault_address!)}><Copy className="h-3 w-3 text-muted-foreground" /></button>
                       </div>
                     </div>
                   )}
                 </div>
+                
+                {/* Jupiter Swap Integration prompt */}
+                {tournament.entry_fee > 0 && (
+                  <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-100 flex flex-col gap-1 text-xs text-yellow-800">
+                    <span className="font-semibold flex items-center gap-1">
+                      <AlertTriangle className="h-3.5 w-3.5 text-yellow-600" />
+                      Token Swap Available
+                    </span>
+                    <span>
+                      Don&apos;t have enough {tournament.token_type}? Swap your other tokens on our{' '}
+                      <a href="/swap" className="font-bold underline hover:text-yellow-950">
+                        Token Swap Page
+                      </a>{' '}
+                      using Jupiter Aggregator instantly.
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100">
                   <Shield className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-                  <p className="text-xs text-blue-700">Your payment will be recorded on Solana for full transparency. The entry fee contributes to the prize pool.</p>
+                  <p className="text-xs text-blue-700">Your entry fee will be held in a decentralized Solana escrow vault and will only be distributed to verified winners.</p>
                 </div>
               </div>
               <DialogFooter>
@@ -423,21 +505,21 @@ export function TournamentDetailPage() {
             <>
               <DialogHeader>
                 <DialogTitle>Pay Entry Fee</DialogTitle>
-                <DialogDescription>Send exactly {formatSOL(tournament.entry_fee)} to the organizer</DialogDescription>
+                <DialogDescription>Send exactly {formatSOL(tournament.entry_fee, 4, tournament.token_type)} to the Escrow PDA</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
                 <div className="p-3 rounded-lg border space-y-2">
-                  <p className="text-xs text-muted-foreground font-medium">Destination Wallet</p>
+                  <p className="text-xs text-muted-foreground font-medium">Escrow Contract Account</p>
                   <div className="flex items-center gap-2">
                     <code className="text-xs font-mono flex-1 bg-muted px-2 py-1.5 rounded break-all">
-                      {tournament.organizer_wallet}
+                      {tournament.vault_address || tournament.organizer_wallet}
                     </code>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => copyToClipboard(tournament.organizer_wallet!)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => copyToClipboard(tournament.vault_address || tournament.organizer_wallet!)}>
                       <Copy className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
-                <p className="text-sm text-center font-semibold">Amount: {formatSOL(tournament.entry_fee)}</p>
+                <p className="text-sm text-center font-semibold">Amount: {formatSOL(tournament.entry_fee, 4, tournament.token_type)}</p>
               </div>
               <DialogFooter className="flex-col gap-2 sm:flex-col">
                 <Button className="w-full" onClick={handlePayWithWallet}>
@@ -485,7 +567,7 @@ export function TournamentDetailPage() {
                 <div className="w-12 h-12 rounded-full border-4 border-brand border-t-transparent animate-spin" />
               </div>
               <p className="font-semibold">Verifying on Solana...</p>
-              <p className="text-sm text-muted-foreground">Checking your transaction on the blockchain</p>
+              <p className="text-sm text-muted-foreground font-mono text-xs">{txSignature ? `${txSignature.slice(0, 32)}...` : ''}</p>
             </div>
           )}
 
@@ -498,7 +580,7 @@ export function TournamentDetailPage() {
                 <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
                 <p className="text-sm text-muted-foreground">
                   {tournament.entry_fee > 0
-                    ? 'Your payment has been submitted and is being verified on Solana.'
+                    ? `Your payment has been submitted and is verified in the tournament escrow.`
                     : 'You have successfully registered for this tournament.'}
                 </p>
                 {txSignature && (
@@ -513,6 +595,43 @@ export function TournamentDetailPage() {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dispute Dialog */}
+      <Dialog open={disputeDialogOpen} onOpenChange={setDisputeDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Dispute Match Result
+            </DialogTitle>
+            <DialogDescription>
+              Submit details explaining why this match score is incorrect.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Reason for Dispute *</Label>
+              <Textarea
+                placeholder="E.g., Player A disconnected in round 2 but organizer marked them as the winner. Proof link: twitch.tv/clip..."
+                value={disputeReason}
+                onChange={(e) => setDisputeReason(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDisputeDialogOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              loading={createDisputeMutation.isPending}
+              disabled={!disputeReason.trim()}
+              onClick={() => createDisputeMutation.mutate()}
+            >
+              Submit Dispute
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -546,5 +665,225 @@ function TournamentDetailSkeleton() {
         <Skeleton className="h-64 rounded-lg" />
       </div>
     </div>
+  )
+}
+
+interface GovernanceMatchesListProps {
+  matches: any[]
+  tournamentId: string
+  isRegistered: boolean
+  profileId?: string
+  wallet: any
+  onDisputeTriggered: (matchId: string) => void
+}
+
+function GovernanceMatchesList({
+  matches,
+  tournamentId,
+  isRegistered,
+  profileId,
+  wallet,
+  onDisputeTriggered,
+}: GovernanceMatchesListProps) {
+  const completedMatches = matches.filter((m) => m.match_status === 'completed')
+
+  if (!completedMatches.length) {
+    return (
+      <EmptyState
+        icon={<VoteIcon className="h-8 w-8" />}
+        title="No completed matches yet"
+        description="Once matches are completed and scores are entered, they will be listable here for community verification."
+      />
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="p-4 bg-muted/40 rounded-lg border text-sm text-muted-foreground space-y-1.5">
+        <span className="font-semibold text-foreground flex items-center gap-1">
+          <Shield className="h-4 w-4 text-brand-600" />
+          Esports Decentralized Governance
+        </span>
+        <p className="text-xs">
+          If an organizer inputs a fraudulent or incorrect result, players can dispute it.
+          All participants can vote on-chain with signature authorization to resolve result accuracy.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {completedMatches.map((match) => (
+          <GovernanceMatchCard
+            key={match.id}
+            match={match}
+            tournamentId={tournamentId}
+            isRegistered={isRegistered}
+            profileId={profileId}
+            wallet={wallet}
+            onDisputeTriggered={onDisputeTriggered}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function GovernanceMatchCard({
+  match,
+  tournamentId,
+  isRegistered,
+  profileId,
+  wallet,
+  onDisputeTriggered,
+}: {
+  match: any
+  tournamentId: string
+  isRegistered: boolean
+  profileId?: string
+  wallet: any
+  onDisputeTriggered: (matchId: string) => void
+}) {
+  const queryClient = useQueryClient()
+  const [selectedCandidate, setSelectedCandidate] = useState('')
+
+  // Load dispute state
+  const { data: dispute, refetch: refetchDispute } = useQuery({
+    queryKey: ['dispute', match.id],
+    queryFn: () => governanceService.getDisputeByMatchId(match.id),
+  })
+
+  // Load votes
+  const { data: votes = [], refetch: refetchVotes } = useQuery({
+    queryKey: ['votes', dispute?.id],
+    queryFn: () => governanceService.getDisputeVotes(dispute!.id),
+    enabled: !!dispute?.id,
+  })
+
+  const voteMutation = useMutation({
+    mutationFn: async () => {
+      if (!profileId || !dispute) throw new Error('Not authenticated or no active dispute')
+      if (!selectedCandidate) throw new Error('Select a candidate')
+      return governanceService.castVote(dispute.id, profileId, selectedCandidate, wallet)
+    },
+    onSuccess: () => {
+      toast({ title: 'Vote recorded!', description: 'Your signature has been registered.' })
+      refetchVotes()
+    },
+    onError: (err) => {
+      toast({ title: 'Voting failed', description: (err as Error).message, variant: 'destructive' })
+    },
+  })
+
+  const p1 = match.player_one_profile
+  const p2 = match.player_two_profile
+  const winner = match.winner_profile
+
+  // Calculate vote splits
+  const p1Votes = votes.filter((v) => v.vote_for === p1?.id).length
+  const p2Votes = votes.filter((v) => v.vote_for === p2?.id).length
+  const totalVotes = votes.length
+
+  const p1Percent = totalVotes > 0 ? (p1Votes / totalVotes) * 100 : 0
+  const p2Percent = totalVotes > 0 ? (p2Votes / totalVotes) * 100 : 0
+
+  const hasVoted = votes.some((v) => v.voter_id === profileId)
+
+  return (
+    <Card className="border bg-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold flex items-center justify-between">
+          <span>Round {match.round} Match</span>
+          {dispute ? (
+            <Badge variant="destructive" className="animate-pulse">Disputed ({dispute.status})</Badge>
+          ) : (
+            <Badge variant="outline" className="text-green-600 bg-green-50/50">Settled</Badge>
+          )}
+        </CardTitle>
+        <CardDescription>
+          Organizer set winner: <span className="font-bold text-foreground">{winner?.username || 'Draw'}</span>
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Match Players comparison */}
+        <div className="flex justify-around items-center py-2 bg-muted/20 rounded-lg">
+          <div className="text-center space-y-1">
+            <span className="font-medium text-sm">{p1?.username}</span>
+            {winner?.id === p1?.id && <Badge variant="secondary" className="block text-[10px] py-0">Declared Winner</Badge>}
+          </div>
+          <span className="text-xs text-muted-foreground font-bold">VS</span>
+          <div className="text-center space-y-1">
+            <span className="font-medium text-sm">{p2?.username}</span>
+            {winner?.id === p2?.id && <Badge variant="secondary" className="block text-[10px] py-0">Declared Winner</Badge>}
+          </div>
+        </div>
+
+        {dispute ? (
+          <div className="space-y-3 pt-2 border-t text-xs">
+            <div className="bg-destructive/5 p-3 rounded border border-destructive/10 text-destructive space-y-1">
+              <span className="font-bold block">Dispute Reason:</span>
+              <p>{dispute.reason}</p>
+              <span className="text-[10px] text-muted-foreground block">Raised by {dispute.creator?.username}</span>
+            </div>
+
+            {/* Voting panel */}
+            <div className="space-y-2">
+              <span className="font-bold text-sm text-foreground flex items-center gap-1">
+                <VoteIcon className="h-4 w-4" />
+                Community Vote Verification
+              </span>
+              
+              {/* Vote split display */}
+              <div className="space-y-1 bg-muted/40 p-3 rounded border">
+                <div className="flex justify-between text-[11px] font-semibold mb-1">
+                  <span>{p1?.username}: {p1Votes} votes ({p1Percent.toFixed(0)}%)</span>
+                  <span>{p2?.username}: {p2Votes} votes ({p2Percent.toFixed(0)}%)</span>
+                </div>
+                <div className="w-full h-2.5 rounded-full bg-muted overflow-hidden flex">
+                  <div className="h-full bg-brand" style={{ width: `${p1Percent}%` }} />
+                  <div className="h-full bg-orange-500" style={{ width: `${p2Percent}%` }} />
+                </div>
+                <span className="text-[10px] text-muted-foreground block text-right mt-1">{totalVotes} verified participant signatures</span>
+              </div>
+
+              {/* Vote action */}
+              {isRegistered && !hasVoted && (
+                <div className="space-y-2 pt-1.5">
+                  <Label className="text-xs">Who is the rightful winner of this match?</Label>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => { setSelectedCandidate(p1.id); voteMutation.mutate() }}>
+                      Vote for {p1?.username}
+                    </Button>
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => { setSelectedCandidate(p2.id); voteMutation.mutate() }}>
+                      Vote for {p2?.username}
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Note: Voting requires signing a cryptographic message with your connected wallet. This is gasless.
+                  </p>
+                </div>
+              )}
+
+              {hasVoted && (
+                <p className="text-[11px] font-medium text-green-600 text-center py-1">
+                  ✓ Your cryptographic vote signature has been successfully registered.
+                </p>
+              )}
+            </div>
+          </div>
+        ) : (
+          isRegistered && (
+            <div className="flex justify-end pt-1 border-t">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-destructive hover:bg-destructive/10 hover:text-destructive gap-1"
+                onClick={() => onDisputeTriggered(match.id)}
+              >
+                <AlertTriangle className="h-3 w-3" /> Dispute Score
+              </Button>
+            </div>
+          )
+        )}
+      </CardContent>
+    </Card>
   )
 }

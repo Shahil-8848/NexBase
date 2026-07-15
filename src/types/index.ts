@@ -43,6 +43,9 @@ export interface Tournament {
   end_date: string | null
   organizer_wallet: string | null
   rules: string | null
+  token_type: 'SOL' | 'USDC'
+  escrow_address: string | null
+  vault_address: string | null
   created_at: string
   // joined via query
   organizer?: Profile

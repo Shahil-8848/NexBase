@@ -1,13 +1,13 @@
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Trophy, Wallet, BarChart3, CheckCircle2, ExternalLink } from 'lucide-react'
+import { Trophy, Wallet, BarChart3, CheckCircle2, ExternalLink, ShieldAlert, Award } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { transactionService } from '@/services/transaction.service'
 import { useAuthContext } from '@/app/auth-context'
 import { PageHeader } from '@/components/shared/page-header'
 import { WalletBadge } from '@/components/shared/wallet-badge'
 import { EmptyState } from '@/components/shared/empty-state'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -50,6 +50,20 @@ export function ProfilePage() {
     enabled: !!id,
   })
 
+  // Query for on-chain achievement badges
+  const { data: badges = [], isLoading: badgesLoading } = useQuery({
+    queryKey: ['badges', id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('badges')
+        .select('*, tournament:tournaments(title)')
+        .eq('player_id', id!)
+        .order('created_at', { ascending: false })
+      return data ?? []
+    },
+    enabled: !!id,
+  })
+
   const totalEarnings = (transactions ?? [])
     .filter((t) => t.type === 'prize' && t.status === 'confirmed')
     .reduce((sum, t) => sum + Number(t.amount), 0)
@@ -64,38 +78,96 @@ export function ProfilePage() {
       <PageHeader title={isOwn ? 'My Profile' : profile.username} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Profile card */}
-        <Card>
-          <CardContent className="p-6 text-center space-y-4">
-            <Avatar className="h-20 w-20 mx-auto">
-              <AvatarImage src={profile.avatar ?? undefined} />
-              <AvatarFallback className="text-2xl font-bold bg-brand/20 text-brand-700">
-                {profile.username.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <h2 className="font-bold text-xl">{profile.username}</h2>
-              <Badge variant="secondary" className="mt-1 capitalize">{profile.role}</Badge>
-            </div>
-            <WalletBadge address={profile.wallet_address} showAddress />
-            <Separator />
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-brand-600">{profile.trust_score}</p>
-                <p className="text-xs text-muted-foreground">Trust Score</p>
+        {/* Left Column: Profile Card + On-Chain Badges */}
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="p-6 text-center space-y-4">
+              <Avatar className="h-20 w-20 mx-auto">
+                <AvatarImage src={profile.avatar ?? undefined} />
+                <AvatarFallback className="text-2xl font-bold bg-brand/20 text-brand-700">
+                  {profile.username.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <h2 className="font-bold text-xl">{profile.username}</h2>
+                <Badge variant="secondary" className="mt-1 capitalize">{profile.role}</Badge>
               </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold">{participations?.length ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Tournaments</p>
+              <WalletBadge address={profile.wallet_address} showAddress />
+              <Separator />
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-brand-600">{profile.trust_score}</p>
+                  <p className="text-xs text-muted-foreground">Trust Score</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{participations?.length ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">Tournaments</p>
+                </div>
               </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Joined {formatRelative(profile.created_at)}
-            </p>
-          </CardContent>
-        </Card>
+              <p className="text-xs text-muted-foreground">
+                Joined {formatRelative(profile.created_at)}
+              </p>
+            </CardContent>
+          </Card>
 
-        {/* Stats + Activity */}
+          {/* On-Chain Achievements & Badges Card */}
+          <Card className="border border-brand-100 bg-brand-50/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Award className="h-5 w-5 text-brand" />
+                Solana Badges ({badges.length})
+              </CardTitle>
+              <CardDescription>Verified achievements earned in competition</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {badgesLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : !badges.length ? (
+                <div className="text-center py-6 text-xs text-muted-foreground space-y-2">
+                  <Trophy className="h-8 w-8 text-muted-foreground/30 mx-auto" />
+                  <p>No trophies earned yet. Win tournaments to mint gold badges!</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {badges.map((badge) => (
+                    <div key={badge.id} className="p-3 bg-card border border-brand-100 rounded-lg flex items-center gap-3 relative overflow-hidden group hover:shadow-sm transition-all">
+                      <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-brand" />
+                      <img
+                        src={badge.image_url}
+                        alt={badge.title}
+                        className="w-10 h-10 rounded bg-muted object-cover border border-brand-100/50"
+                      />
+                      <div className="flex-1 min-w-0 pr-4">
+                        <p className="text-sm font-semibold text-foreground leading-tight truncate">
+                          {badge.title}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {badge.tournament?.title || 'ChainArena Tournament'}
+                        </p>
+                      </div>
+                      {badge.signature && (
+                        <a
+                          href={`https://explorer.solana.com/tx/${badge.signature}?cluster=devnet`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-brand transition-colors p-1"
+                          title="Verify achievement on Solana"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column: Stats + Activity */}
         <div className="lg:col-span-2 space-y-6">
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -116,17 +188,17 @@ export function ProfilePage() {
                 <EmptyState icon={<Trophy className="h-8 w-8" />} title="No tournaments yet" />
               ) : (
                 <div className="divide-y -mx-6">
-                  {participations.map((p: Record<string, unknown>) => {
+                  {participations.map((p: any) => {
                     const tour = p.tournament as { id: string; title: string; game: string; tournament_status: string } | null
                     return (
-                      <div key={p.id as string} className="flex items-center gap-3 px-6 py-3">
+                      <div key={p.id} className="flex items-center gap-3 px-6 py-3">
                         <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-sm">🎮</div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{tour?.title ?? 'Unknown'}</p>
                           <p className="text-xs text-muted-foreground">{tour?.game}</p>
                         </div>
-                        <Badge variant={(p.payment_status as string) === 'verified' ? 'success' : 'secondary'} className="text-xs">
-                          {(p.payment_status as string)}
+                        <Badge variant={p.payment_status === 'verified' ? 'success' : 'secondary'} className="text-xs">
+                          {p.payment_status}
                         </Badge>
                       </div>
                     )

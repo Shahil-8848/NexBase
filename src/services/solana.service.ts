@@ -13,7 +13,7 @@ export interface VerifiedPayment {
   signature: string
   from: string
   to: string
-  amount: number // in SOL
+  amount: number // in SOL or USDC
   confirmed: boolean
   explorerUrl: string
   blockTime: number | null
@@ -33,7 +33,8 @@ export const solanaService = {
   async verifyTransaction(
     signature: string,
     expectedTo: string,
-    expectedAmount: number // in SOL
+    expectedAmount: number, // in SOL or Tokens
+    tokenMintAddress?: string
   ): Promise<VerifiedPayment | null> {
     try {
       const tx = await connection.getParsedTransaction(signature, {
@@ -45,7 +46,56 @@ export const solanaService = {
       // Check it's a confirmed, non-error transaction
       if (tx.meta.err) return null
 
-      // Look for SOL transfer instruction
+      // Case A: Verify SPL Token Transfer (e.g., USDC)
+      if (tokenMintAddress) {
+        const preTokenBalances = tx.meta.preTokenBalances || []
+        const postTokenBalances = tx.meta.postTokenBalances || []
+
+        let fromAddress = ''
+        let toAddress = ''
+        let amountTransferred = 0
+
+        const balances = new Map<string, { pre: number; post: number }>()
+
+        for (const item of preTokenBalances) {
+          if (item.mint === tokenMintAddress && item.owner) {
+            balances.set(item.owner, { pre: item.uiTokenAmount.uiAmount || 0, post: 0 })
+          }
+        }
+
+        for (const item of postTokenBalances) {
+          if (item.mint === tokenMintAddress && item.owner) {
+            const current = balances.get(item.owner) || { pre: 0, post: 0 }
+            current.post = item.uiTokenAmount.uiAmount || 0
+            balances.set(item.owner, current)
+          }
+        }
+
+        for (const [owner, bal] of balances.entries()) {
+          const delta = bal.post - bal.pre
+          if (delta > 0) {
+            toAddress = owner
+            amountTransferred = delta
+          } else if (delta < 0) {
+            fromAddress = owner
+          }
+        }
+
+        const toMatches = toAddress.toLowerCase() === expectedTo.toLowerCase()
+        const amountMatches = amountTransferred >= expectedAmount * 0.99
+
+        return {
+          signature,
+          from: fromAddress,
+          to: toAddress,
+          amount: amountTransferred,
+          confirmed: toMatches && amountMatches,
+          explorerUrl: getSolanaExplorerUrl(signature),
+          blockTime: tx.blockTime ?? null,
+        }
+      }
+
+      // Case B: Verify SOL Transfer
       const instructions = tx.transaction.message.instructions
       let fromAddress = ''
       let toAddress = ''
@@ -60,7 +110,7 @@ export const solanaService = {
         }
       }
 
-      // If no parsed transfer, fall back to account key delta
+      // If no parsed transfer, fall back to account key delta scan
       if (!fromAddress) {
         const accounts = tx.transaction.message.accountKeys
         const preBalances = tx.meta.preBalances
@@ -94,7 +144,7 @@ export const solanaService = {
 
       const amountSOL = amountLamports / LAMPORTS_PER_SOL
 
-      // Validate destination and amount (allow 1% tolerance for fees)
+      // Validate destination and amount (allow 1% tolerance for fee rounding)
       const toMatches = toAddress.toLowerCase() === expectedTo.toLowerCase()
       const amountMatches = amountSOL >= expectedAmount * 0.99
 

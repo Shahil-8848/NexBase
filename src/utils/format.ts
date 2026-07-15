@@ -15,8 +15,8 @@ export function formatRelative(date: string | Date): string {
   return formatDistanceToNow(d, { addSuffix: true })
 }
 
-export function formatSOL(amount: number, decimals = 4): string {
-  return `${Number(amount).toFixed(decimals)} SOL`
+export function formatSOL(amount: number, decimals = 4, tokenType = 'SOL'): string {
+  return `${Number(amount).toFixed(decimals)} ${tokenType}`
 }
 
 export function formatNumber(n: number): string {

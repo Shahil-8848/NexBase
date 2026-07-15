@@ -9,6 +9,7 @@ import type {
 import { PAGE_SIZE } from '@/constants'
 
 export interface CreateTournamentData {
+  id?: string
   title: string
   description?: string
   game: string
@@ -20,6 +21,9 @@ export interface CreateTournamentData {
   end_date?: string
   organizer_wallet?: string
   rules?: string
+  token_type?: 'SOL' | 'USDC'
+  escrow_address?: string
+  vault_address?: string
 }
 
 export const tournamentService = {

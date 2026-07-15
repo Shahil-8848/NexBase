@@ -57,3 +57,6 @@ export const GAMES = [
 export const PAGE_SIZE = 10
 
 export const SOLANA_EXPLORER_BASE = 'https://explorer.solana.com'
+
+export const USDC_MINT = '4zMMC9sXzTL2gNNrtfPUPQvTSS14hxatbi2S6JKZ2sVZ'
+
