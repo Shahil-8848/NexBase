@@ -31,8 +31,12 @@ const schema = z.object({
   organizer_wallet: z.string().optional(),
   rules: z.string().max(2000).optional(),
   banner: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  category: z.enum(['1v1', 'high_score']).default('1v1'),
+  mode: z.enum(['solo', 'team']).default('solo'),
 })
 type FormData = z.infer<typeof schema>
+
+import { useEffect } from 'react'
 
 export function CreateTournamentPage() {
   const navigate = useNavigate()
@@ -40,25 +44,47 @@ export function CreateTournamentPage() {
   const { address } = useSolanaWallet()
   const queryClient = useQueryClient()
 
-  const {
-    register, handleSubmit, setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: {
+  // Load saved draft if it exists
+  const getSavedDraft = (): Partial<FormData> => {
+    try {
+      const saved = localStorage.getItem('nexbase_create_tournament_draft')
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    return {
       max_players: 16,
       entry_fee: 0,
       token_type: 'SOL',
       prize_pool: 0,
       organizer_wallet: address ?? profile?.wallet_address ?? '',
-    },
+      category: '1v1',
+      mode: 'solo',
+    }
+  }
+
+  const {
+    register, handleSubmit, setValue, watch,
+    formState: { errors, isSubmitting },
+  } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: getSavedDraft(),
   })
+
+  const formValues = watch()
+
+  // Save to localStorage when form changes
+  useEffect(() => {
+    localStorage.setItem('nexbase_create_tournament_draft', JSON.stringify(formValues))
+  }, [formValues])
 
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
       const tournamentId = crypto.randomUUID()
       const vaultKey = await getTournamentVaultKeypair(tournamentId)
-      
+
       return tournamentService.createTournament(profile!.id, {
         id: tournamentId,
         ...data,
@@ -72,6 +98,7 @@ export function CreateTournamentPage() {
       })
     },
     onSuccess: (tournament) => {
+      localStorage.removeItem('nexbase_create_tournament_draft')
       toast({ title: 'Tournament created!', description: 'You can now manage it from your dashboard.' })
       queryClient.invalidateQueries({ queryKey: ['organizer-tournaments', profile?.id] })
       navigate(`/organizer/tournaments/${tournament.id}`)
@@ -101,7 +128,7 @@ export function CreateTournamentPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Game *</Label>
-              <Select onValueChange={(v) => setValue('game', v)}>
+              <Select value={watch('game')} onValueChange={(v) => setValue('game', v)}>
                 <SelectTrigger><SelectValue placeholder="Select a game" /></SelectTrigger>
                 <SelectContent>
                   {GAMES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
@@ -121,6 +148,37 @@ export function CreateTournamentPage() {
           </CardContent>
         </Card>
 
+        {/* Tournament Format */}
+        <Card>
+          <CardHeader><CardTitle className="text-base">Tournament Format</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Tournament Mode</Label>
+                <Select value={watch('mode')} onValueChange={(v) => setValue('mode', v as 'solo' | 'team')}>
+                  <SelectTrigger><SelectValue placeholder="Select mode" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="solo">Solo Mode (Individual Players)</SelectItem>
+                    <SelectItem value="team">Team Mode (4 or 5-Player Teams)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">Choose whether players compete individually or as a team.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Tournament Category / Format</Label>
+                <Select value={watch('category')} onValueChange={(v) => setValue('category', v as '1v1' | 'high_score')}>
+                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1v1">1v1 Knockout Bracket (Single Elimination)</SelectItem>
+                    <SelectItem value="high_score">Map-Based / Leaderboard High Score</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">Choose how match winners are determined.</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Registration Settings */}
         <Card>
           <CardHeader><CardTitle className="text-base">Registration &amp; Fees</CardTitle></CardHeader>
@@ -130,7 +188,7 @@ export function CreateTournamentPage() {
                 <Label>Entry Fee</Label>
                 <div className="flex gap-2">
                   <Input type="number" className="flex-1" step="0.0001" min="0" placeholder="0" {...register('entry_fee')} />
-                  <Select defaultValue="SOL" onValueChange={(v) => setValue('token_type', v as 'SOL' | 'USDC')}>
+                  <Select value={watch('token_type')} onValueChange={(v) => setValue('token_type', v as 'SOL' | 'USDC')}>
                     <SelectTrigger className="w-[90px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="SOL">SOL</SelectItem>
@@ -148,11 +206,15 @@ export function CreateTournamentPage() {
                 <p className="text-xs text-muted-foreground">Initial sponsored amount</p>
               </div>
               <div className="space-y-1.5">
-                <Label>Max Players</Label>
-                <Select defaultValue="16" onValueChange={(v) => setValue('max_players', Number(v))}>
+                <Label>{watch('mode') === 'team' ? 'Max Teams' : 'Max Players'}</Label>
+                <Select value={String(watch('max_players'))} onValueChange={(v) => setValue('max_players', Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {[4, 8, 16, 32, 64, 128].map(n => <SelectItem key={n} value={String(n)}>{n} players</SelectItem>)}
+                    {[4, 8, 16, 32, 64, 128].map(n => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n} {watch('mode') === 'team' ? 'teams' : 'players'}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

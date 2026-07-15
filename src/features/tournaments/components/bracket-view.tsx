@@ -7,9 +7,10 @@ import { cn, getAvatarUrl } from '@/lib/utils'
 
 interface BracketViewProps {
   matches: Match[]
+  teamNamesMap?: Record<string, string>
 }
 
-export function BracketView({ matches }: BracketViewProps) {
+export function BracketView({ matches, teamNamesMap }: BracketViewProps) {
   if (!matches.length) {
     return (
       <EmptyState
@@ -37,7 +38,7 @@ export function BracketView({ matches }: BracketViewProps) {
             </p>
             <div className="flex flex-col gap-3">
               {roundMatches.map((match) => (
-                <MatchCard key={match.id} match={match} />
+                <MatchCard key={match.id} match={match} teamNamesMap={teamNamesMap} />
               ))}
             </div>
           </div>
@@ -47,7 +48,7 @@ export function BracketView({ matches }: BracketViewProps) {
   )
 }
 
-function MatchCard({ match }: { match: Match }) {
+function MatchCard({ match, teamNamesMap }: { match: Match; teamNamesMap?: Record<string, string> }) {
   return (
     <div className="border rounded-lg bg-card overflow-hidden">
       <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between">
@@ -57,11 +58,13 @@ function MatchCard({ match }: { match: Match }) {
       <div className="divide-y">
         <PlayerRow
           profile={match.player_one_profile}
+          teamName={teamNamesMap?.[match.player_one]}
           isWinner={match.winner === match.player_one}
           isCompleted={match.match_status === 'completed'}
         />
         <PlayerRow
           profile={match.player_two_profile}
+          teamName={teamNamesMap?.[match.player_two]}
           isWinner={match.winner === match.player_two}
           isCompleted={match.match_status === 'completed'}
         />
@@ -72,10 +75,12 @@ function MatchCard({ match }: { match: Match }) {
 
 function PlayerRow({
   profile,
+  teamName,
   isWinner,
   isCompleted,
 }: {
   profile?: { username: string; avatar?: string | null } | null
+  teamName?: string
   isWinner: boolean
   isCompleted: boolean
 }) {
@@ -92,7 +97,7 @@ function PlayerRow({
         </AvatarFallback>
       </Avatar>
       <span className={cn('flex-1 truncate', isWinner && 'font-semibold')}>
-        {profile?.username ?? 'TBD'}
+        {teamName || profile?.username || 'TBD'}
       </span>
       {isCompleted && isWinner && (
         <Trophy className="h-3 w-3 text-brand-600 shrink-0" />

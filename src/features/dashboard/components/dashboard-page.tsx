@@ -1,8 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
   Trophy, Wallet, TrendingUp, DollarSign,
   ArrowRight, ExternalLink, Plus, Shield,
+  Check, X, Bell, ShieldAlert,
 } from 'lucide-react'
 import { useAuthContext } from '@/app/auth-context'
 import { useSolanaWallet } from '@/hooks/use-wallet'
@@ -20,12 +21,67 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 import { formatSOL, formatRelative } from '@/utils/format'
 import { truncateAddress } from '@/lib/utils'
+import { teamService } from '@/services/team.service'
+import { supabase } from '@/lib/supabase'
+import { toast } from '@/hooks/use-toast'
 import targetIcon from '@/assets/3d-target.png'
 import solCoinIcon from '@/assets/SOL_COIN.png'
+import trophyIcon from '@/assets/trophy.png'
 
 export function DashboardPage() {
   const { profile, isOrganizer } = useAuthContext()
   const { connected, address } = useSolanaWallet()
+
+  // Teams Queries & Mutations
+  const queryClient = useQueryClient()
+  const { data: invites = [] } = useQuery({
+    queryKey: ['pending-invites', profile?.id],
+    queryFn: () => teamService.getPendingInvites(profile!.id),
+    enabled: !!profile?.id,
+  })
+
+  const { data: teamMemberships = [] } = useQuery({
+    queryKey: ['my-team-memberships', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return []
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('team_id, team:teams(*)')
+        .eq('player_id', profile.id)
+        .eq('status', 'accepted')
+      if (error) throw error
+      return data
+    },
+    enabled: !!profile?.id,
+  })
+
+  const teamIds = teamMemberships.map((m: any) => m.team_id)
+
+  const { data: teamRegistrations = [] } = useQuery({
+    queryKey: ['my-team-registrations', teamIds],
+    queryFn: async () => {
+      if (!teamIds.length) return []
+      const { data, error } = await supabase
+        .from('participants')
+        .select('*, tournament:tournaments(*), team:teams(*)')
+        .in('team_id', teamIds)
+        .eq('payment_status', 'verified')
+      if (error) throw error
+      return data
+    },
+    enabled: teamIds.length > 0,
+  })
+
+  const responseMutation = useMutation({
+    mutationFn: ({ inviteId, status }: { inviteId: string; status: 'accepted' | 'rejected' }) =>
+      teamService.respondToInvite(inviteId, status),
+    onSuccess: (_, variables) => {
+      toast({ title: variables.status === 'accepted' ? 'Joined team!' : 'Invitation declined' })
+      queryClient.invalidateQueries({ queryKey: ['pending-invites', profile?.id] })
+      queryClient.invalidateQueries({ queryKey: ['my-team-memberships', profile?.id] })
+    },
+    onError: (err) => toast({ title: 'Action failed', description: (err as Error).message, variant: 'destructive' }),
+  })
 
   const { data: tournamentsData, isLoading: toursLoading } = useQuery({
     queryKey: ['tournaments', 'listing', { status: 'registration', page: 1 }],
@@ -80,6 +136,74 @@ export function DashboardPage() {
           )
         }
       />
+
+      {/* Pending Team Invites Alert */}
+      {invites.length > 0 && (
+        <div className="space-y-3">
+          {invites.map((invite) => (
+            <Card key={invite.id} className="border border-brand/20 bg-brand/5">
+              <CardContent className="p-4 flex flex-row items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-brand/10 text-brand">
+                    <ShieldAlert className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">Team Invitation Received</p>
+                    <p className="text-xs text-muted-foreground">
+                      You have been invited to join <span className="font-semibold text-foreground">{invite.team?.name}</span> ({invite.team?.game}) by <span className="font-semibold text-foreground">{invite.team?.captain?.username}</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white gap-1"
+                    onClick={() => responseMutation.mutate({ inviteId: invite.id, status: 'accepted' })}
+                    loading={responseMutation.isPending && responseMutation.variables?.inviteId === invite.id}
+                  >
+                    <Check className="h-3.5 w-3.5" /> Accept
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-destructive hover:bg-destructive/10 border-destructive/20 gap-1"
+                    onClick={() => responseMutation.mutate({ inviteId: invite.id, status: 'rejected' })}
+                    loading={responseMutation.isPending && responseMutation.variables?.inviteId === invite.id}
+                  >
+                    <X className="h-3.5 w-3.5" /> Decline
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Member Tournament Registration Alerts */}
+      {teamRegistrations.length > 0 && (
+        <div className="space-y-2">
+          {teamRegistrations.map((reg) => (
+            <Card key={reg.id} className="border-l-4 border-l-green-500 bg-green-500/5">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-green-500/10 text-green-600 shrink-0">
+                  <Bell className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-semibold text-sm text-foreground">Registered squad!</span>
+                    <Badge variant="secondary" className="text-[9px] uppercase tracking-wider bg-green-100 text-green-800 hover:bg-green-100 font-semibold border-green-200">
+                      Team Mode
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Your team <span className="font-semibold text-foreground">{reg.team?.name}</span> has been registered for the tournament <span className="font-semibold text-foreground">{reg.tournament?.title}</span> starting on <span className="font-semibold text-foreground">{formatRelative(reg.tournament?.start_date)}</span>.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Wallet connect banner */}
       {!connected && (
@@ -193,7 +317,7 @@ export function DashboardPage() {
               </div>
             ) : !tournamentsData?.data.length ? (
               <EmptyState
-                icon={<Trophy className="h-8 w-8" />}
+                icon={<img src={trophyIcon} alt="No tournaments" className="h-16 w-16 object-contain" />}
                 title="No open tournaments"
                 description="Check back soon for new competitions"
               />
@@ -205,8 +329,14 @@ export function DashboardPage() {
                     to={`/tournaments/${t.id}`}
                     className="flex items-center gap-4 px-6 py-3 hover:bg-muted/50 transition-colors"
                   >
-                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-lg shrink-0">
-                      🎮
+                    <div className="w-14 h-9 rounded-lg border border-border overflow-hidden shrink-0 flex items-center justify-center bg-zinc-950/20 shadow-sm">
+                      {t.banner ? (
+                        <img src={t.banner} alt={t.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-brand/10 flex items-center justify-center text-lg">
+                          🎮
+                        </div>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{t.title}</p>

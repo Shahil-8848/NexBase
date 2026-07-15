@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useMemo } from 'react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Trophy, Users, Calendar, Wallet, ExternalLink,
@@ -12,6 +12,8 @@ import { solanaService } from '@/services/solana.service'
 import { useAuthContext } from '@/app/auth-context'
 import { useSolanaWallet } from '@/hooks/use-wallet'
 import { governanceService, Dispute, Vote } from '@/services/governance.service'
+import { teamService } from '@/services/team.service'
+import { supabase } from '@/lib/supabase'
 import { toast } from '@/hooks/use-toast'
 import { TournamentStatusBadge, PaymentStatusBadge } from '@/components/shared/tournament-status-badge'
 import { EmptyState } from '@/components/shared/empty-state'
@@ -66,17 +68,75 @@ export function TournamentDetailPage() {
     enabled: !!id && !!profile?.id,
   })
 
+  const isRegistered = !!participation
+
   const { data: matches } = useQuery({
     queryKey: ['matches', id],
     queryFn: () => tournamentService.getMatches(id!),
     enabled: !!id,
   })
 
+  // Teams Query
+  const { data: myTeamsCaptained = [] } = useQuery({
+    queryKey: ['my-teams-captained', profile?.id, tournament?.game],
+    queryFn: async () => {
+      const teams = await teamService.getMyTeams(profile!.id)
+      return teams.filter(t => t.captain_id === profile!.id && t.game === tournament!.game)
+    },
+    enabled: !!profile?.id && !!tournament?.game && !!tournament && tournament.mode === 'team',
+  })
+
+  const { data: teamMemberships = [] } = useQuery({
+    queryKey: ['my-team-memberships', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return []
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('team_id, team:teams(*)')
+        .eq('player_id', profile.id)
+        .eq('status', 'accepted')
+      if (error) throw error
+      return data
+    },
+    enabled: !!profile?.id,
+  })
+
+  // Map player ID to team name if in team mode
+  const teamNamesMap = useMemo(() => {
+    const mapping: Record<string, string> = {}
+    if (tournament?.mode === 'team' && participants) {
+      participants.forEach((p) => {
+        if (p.team_id && p.team) {
+          mapping[p.player_id] = p.team.name
+        }
+      })
+    }
+    return mapping
+  }, [tournament, participants])
+
+  const isTeamMemberRegistered = (participants ?? []).some((p) => {
+    return p.team_id && teamMemberships.some((m) => m.team_id === p.team_id)
+  })
+
+  const isUserRegistered = isRegistered || isTeamMemberRegistered
+
+  const registeredTeam = (participants ?? []).find((p) => {
+    if (p.player_id === profile?.id) return true
+    return p.team_id && teamMemberships.some((m) => m.team_id === p.team_id)
+  })?.team
+
+  const [selectedRegisterTeamId, setSelectedRegisterTeamId] = useState<string>('')
+  const activeRegisterTeamId = selectedRegisterTeamId || myTeamsCaptained[0]?.id || ''
+
   // Join mutation
   const joinMutation = useMutation({
     mutationFn: async () => {
       if (!profile?.id || !id) throw new Error('Not authenticated')
-      return tournamentService.joinTournament(id, profile.id, tournament!.entry_fee === 0 ? 'verified' : 'pending')
+      const teamId = tournament?.mode === 'team' ? activeRegisterTeamId : null
+      if (tournament?.mode === 'team' && !teamId) {
+        throw new Error('Please select a team to register')
+      }
+      return tournamentService.joinTournament(id, profile.id, tournament!.entry_fee === 0 ? 'verified' : 'pending', teamId)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['participation', id, profile?.id] })
@@ -186,7 +246,6 @@ export function TournamentDetailPage() {
     } />
   )
 
-  const isRegistered = !!participation
   const isFull = tournament.current_players >= tournament.max_players
   const slots = tournament.max_players - tournament.current_players
 
@@ -312,7 +371,16 @@ export function TournamentDetailPage() {
                           {p.player?.username?.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="flex-1 text-sm font-medium">{p.player?.username}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-semibold block truncate text-foreground">
+                          {p.team_id ? p.team?.name : p.player?.username}
+                        </span>
+                        {p.team_id && (
+                          <span className="text-[10px] text-muted-foreground block truncate">
+                            Captain: {p.player?.username}
+                          </span>
+                        )}
+                      </div>
                       <PaymentStatusBadge status={p.payment_status} />
                       {p.transaction_signature && (
                         <a href={getSolanaExplorerUrl(p.transaction_signature)} target="_blank" rel="noopener noreferrer">
@@ -326,7 +394,7 @@ export function TournamentDetailPage() {
             </TabsContent>
 
             <TabsContent value="bracket" className="mt-4">
-              <BracketView matches={matches ?? []} />
+              <BracketView matches={matches ?? []} teamNamesMap={teamNamesMap} />
             </TabsContent>
 
             <TabsContent value="governance" className="mt-4">
@@ -423,13 +491,15 @@ export function TournamentDetailPage() {
                   <p className="text-xs text-muted-foreground">Connect wallet to join</p>
                   <Shield className="h-5 w-5 text-muted-foreground mx-auto" />
                 </div>
-              ) : isRegistered ? (
+              ) : isUserRegistered ? (
                 <div className="space-y-3 w-full">
                   <div className="flex items-center gap-2 text-sm text-green-600">
                     <CheckCircle2 className="h-4 w-4" />
-                    You&apos;re registered
+                    {tournament.mode === 'team'
+                      ? `Team "${registeredTeam?.name || 'Registered'}" is registered`
+                      : "You're registered"}
                   </div>
-                  {participation.payment_status !== 'verified' && (
+                  {isRegistered && participation && participation.payment_status !== 'verified' && (
                     <Button
                       className="w-full text-xs py-1.5 h-8 mt-1"
                       onClick={() => {
@@ -440,15 +510,47 @@ export function TournamentDetailPage() {
                       {participation.transaction_signature ? 'Retry Payment' : 'Pay Entry Fee'}
                     </Button>
                   )}
+                  {isTeamMemberRegistered && !isRegistered && (
+                    <p className="text-xs text-muted-foreground">
+                      Your team captain handles entry fee payment and coordination.
+                    </p>
+                  )}
                 </div>
               ) : tournament.tournament_status !== 'registration' ? (
                 <p className="text-sm text-muted-foreground text-center">Registration is closed</p>
               ) : isFull ? (
                 <p className="text-sm text-muted-foreground text-center">Tournament is full</p>
+              ) : tournament.mode === 'team' && myTeamsCaptained.length === 0 ? (
+                <div className="text-center p-3 rounded-lg border border-yellow-200 bg-yellow-50/50 space-y-2">
+                  <p className="text-xs text-yellow-800 leading-normal">
+                    You need to be a captain of a team for <span className="font-semibold">{tournament.game}</span> to register.
+                  </p>
+                  <Link to="/teams" className="block">
+                    <Button size="xs" variant="outline" className="w-full text-xs text-yellow-800 border-yellow-300 hover:bg-yellow-100/50">
+                      Manage / Create Team
+                    </Button>
+                  </Link>
+                </div>
               ) : (
-                <Button className="w-full" onClick={() => setJoinDialogOpen(true)}>
-                  Join Tournament
-                </Button>
+                <div className="space-y-3">
+                  {tournament.mode === 'team' && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Register Team *</Label>
+                      <select
+                        value={activeRegisterTeamId}
+                        onChange={(e) => setSelectedRegisterTeamId(e.target.value)}
+                        className="w-full p-2 border rounded-md text-xs bg-card text-foreground"
+                      >
+                        {myTeamsCaptained.map((t) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <Button className="w-full" onClick={() => setJoinDialogOpen(true)}>
+                    {tournament.mode === 'team' ? 'Register Team' : 'Join Tournament'}
+                  </Button>
+                </div>
               )}
 
               {/* Escrow vault/wallet address */}

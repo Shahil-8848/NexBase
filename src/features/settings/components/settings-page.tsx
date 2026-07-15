@@ -213,7 +213,6 @@ export function SettingsPage() {
               <ul className="list-disc pl-4 space-y-1">
                 <li>All payments are recorded on-chain</li>
                 <li>Transaction signatures are publicly verifiable</li>
-                <li>No fake payment screenshots — everything is on Solana</li>
                 <li>Prizes are distributed directly to your wallet</li>
               </ul>
             </CardContent>

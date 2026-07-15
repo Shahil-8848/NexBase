@@ -123,11 +123,12 @@ export const tournamentService = {
   async joinTournament(
     tournamentId: string,
     playerId: string,
-    paymentStatus: 'pending' | 'verified' = 'pending'
+    paymentStatus: 'pending' | 'verified' = 'pending',
+    teamId?: string | null
   ): Promise<Participant> {
     const { data, error } = await supabase
       .from('participants')
-      .insert({ tournament_id: tournamentId, player_id: playerId, payment_status: paymentStatus })
+      .insert({ tournament_id: tournamentId, player_id: playerId, payment_status: paymentStatus, team_id: teamId })
       .select()
       .single()
     if (error) throw error
@@ -141,7 +142,7 @@ export const tournamentService = {
   async getParticipants(tournamentId: string): Promise<Participant[]> {
     const { data, error } = await supabase
       .from('participants')
-      .select('*, player:profiles!player_id(*)')
+      .select('*, player:profiles!player_id(*), team:teams(*)')
       .eq('tournament_id', tournamentId)
       .order('joined_at')
     if (error) throw error

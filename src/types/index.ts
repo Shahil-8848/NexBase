@@ -48,6 +48,8 @@ export interface Tournament {
   escrow_address: string | null
   vault_address: string | null
   created_at: string
+  category?: '1v1' | 'high_score'
+  mode?: 'solo' | 'team'
   // joined via query
   organizer?: Profile
 }
@@ -59,9 +61,11 @@ export interface Participant {
   payment_status: PaymentStatus
   transaction_signature: string | null
   joined_at: string
+  team_id?: string | null
   // joined
   player?: Profile
   tournament?: Tournament
+  team?: Team
 }
 
 export interface Match {
@@ -145,4 +149,23 @@ export interface LeaderboardEntry {
   win_rate: number
   total_earnings: number
   wallet_verified: boolean
+}
+
+export interface Team {
+  id: string
+  name: string
+  game: string
+  captain_id: string
+  created_at: string
+  captain?: Profile
+}
+
+export interface TeamMember {
+  id: string
+  team_id: string
+  player_id: string
+  status: 'pending' | 'accepted' | 'rejected'
+  created_at: string
+  player?: Profile
+  team?: Team
 }

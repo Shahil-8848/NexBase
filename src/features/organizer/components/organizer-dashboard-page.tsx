@@ -5,6 +5,7 @@ import {
   Plus, Trophy, Users, DollarSign, BarChart3,
   Edit, Trash2, Eye, MoreHorizontal, CheckCircle, XCircle,
 } from 'lucide-react'
+import trophyImg from '@/assets/trophy.png'
 import { tournamentService } from '@/services/tournament.service'
 import { useAuthContext } from '@/app/auth-context'
 import { toast } from '@/hooks/use-toast'
@@ -112,7 +113,7 @@ export function OrganizerDashboardPage() {
         ) : !tournaments?.length ? (
           <CardContent>
             <EmptyState
-              icon={<Trophy className="h-12 w-12" />}
+              icon={<img src={trophyImg} alt="Trophy" className="h-16 w-16 object-contain" />}
               title="No tournaments yet"
               description="Create your first tournament to get started"
               action={
@@ -140,8 +141,14 @@ export function OrganizerDashboardPage() {
                   <tr key={t.id} className="border-b hover:bg-muted/30 transition-colors">
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                          <Trophy className="h-4 w-4 text-muted-foreground" />
+                        <div className="w-12 h-8 rounded-lg border border-border overflow-hidden shrink-0 flex items-center justify-center bg-zinc-950/20 shadow-sm">
+                          {t.banner ? (
+                            <img src={t.banner} alt={t.title} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full bg-brand/10 flex items-center justify-center">
+                              <Trophy className="h-3.5 w-3.5 text-brand" />
+                            </div>
+                          )}
                         </div>
                         <div className="min-w-0">
                           <p className="font-medium truncate max-w-[200px]">{t.title}</p>

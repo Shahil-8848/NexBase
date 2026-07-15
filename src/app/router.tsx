@@ -18,6 +18,8 @@ import { LeaderboardPage } from '@/features/leaderboard/components/leaderboard-p
 import { TransactionsPage } from '@/features/transactions/components/transactions-page'
 import { SettingsPage } from '@/features/settings/components/settings-page'
 import { SwapPage } from '@/features/swap/components/swap-page'
+import { TeamsPage } from '@/features/teams/components/teams-page'
+import { CreateTeamPage } from '@/features/teams/components/create-team-page'
 
 // Organizer pages
 import { OrganizerDashboardPage } from '@/features/organizer/components/organizer-dashboard-page'
@@ -87,6 +89,8 @@ const routes = [
           { path: '/transactions', element: <TransactionsPage /> },
           { path: '/settings', element: <SettingsPage /> },
           { path: '/swap', element: <SwapPage /> },
+          { path: '/teams', element: <TeamsPage /> },
+          { path: '/teams/create', element: <CreateTeamPage /> },
           {
             element: <RequireOrganizer />,
             children: [

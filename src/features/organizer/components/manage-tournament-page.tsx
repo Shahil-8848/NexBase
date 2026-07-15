@@ -384,18 +384,33 @@ export function ManageTournamentPage() {
     }
   }, [matches, verifiedPlayers])
 
+  // Map player ID to team name if in team mode
+  const teamNamesMap = useMemo(() => {
+    const mapping: Record<string, string> = {}
+    if (tournament?.mode === 'team' && participants) {
+      participants.forEach((p) => {
+        if (p.team_id && p.team) {
+          mapping[p.player_id] = p.team.name
+        }
+      })
+    }
+    return mapping
+  }, [tournament, participants])
+
   // Get tournament winner if finals are completed
-  const tournamentWinner = useMemo(() => {
+  const tournamentWinnerParticipant = useMemo(() => {
     const R = matches && matches.length > 0 ? Math.max(...matches.map((m) => m.round)) : 0
     if (R === 0) return null
     const roundMatches = matches!.filter((m) => m.round === R)
     const isRoundCompleted = roundMatches.every((m) => m.match_status === 'completed')
 
     if (isRoundCompleted && nextActivePlayers.length === 1) {
-      return verifiedPlayers.find((p) => p.player_id === nextActivePlayers[0])?.player ?? null
+      return verifiedPlayers.find((p) => p.player_id === nextActivePlayers[0]) ?? null
     }
     return null
   }, [matches, nextActivePlayers, verifiedPlayers])
+
+  const tournamentWinner = tournamentWinnerParticipant?.player ?? null
 
   // Group matches by round
   const matchesByRound = useMemo(() => {
@@ -558,8 +573,10 @@ export function ManageTournamentPage() {
                         <AvatarFallback className="text-xs">{p.player?.username?.slice(0,2).toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{p.player?.username}</p>
-                        <p className="text-xs text-muted-foreground">{formatRelative(p.joined_at)}</p>
+                        <p className="text-sm font-semibold text-foreground">{p.team_id ? p.team?.name : p.player?.username}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {p.team_id ? `Captain: ${p.player?.username} · ` : ''}Joined {formatRelative(p.joined_at)}
+                        </p>
                       </div>
                       <PaymentStatusBadge status={p.payment_status} />
                       {p.transaction_signature && (
@@ -625,7 +642,7 @@ export function ManageTournamentPage() {
                   {tournament.tournament_status !== 'active'
                     ? 'Matches can only be generated when the tournament is active (Start Tournament above).'
                     : tournamentWinner
-                    ? `🏆 Tournament complete! Champion is ${tournamentWinner.username}.`
+                    ? `🏆 Tournament complete! Champion is ${tournamentWinnerParticipant?.team_id ? tournamentWinnerParticipant?.team?.name : tournamentWinner.username}.`
                     : matches && matches.length > 0
                     ? `Round ${Math.max(...matches.map(m => m.round))} matches are in progress.`
                     : 'Pair verified players into the opening matches of Round 1.'}
@@ -657,7 +674,7 @@ export function ManageTournamentPage() {
               <div>
                 <h3 className="font-bold text-lg text-green-900">Tournament Complete!</h3>
                 <p className="text-sm text-green-700">
-                  Winner: <span className="font-bold text-green-900">{tournamentWinner.username}</span>
+                  Winner: <span className="font-bold text-green-900">{tournamentWinnerParticipant?.team_id ? tournamentWinnerParticipant?.team?.name : tournamentWinner.username}</span>
                 </p>
               </div>
               {tournament.tournament_status === 'active' && (
@@ -697,6 +714,7 @@ export function ManageTournamentPage() {
                         <MatchRow
                           key={match.id}
                           match={match}
+                          teamNamesMap={teamNamesMap}
                           onSetWinner={(winnerId) => setWinnerMutation.mutate({ matchId: match.id, winnerId })}
                         />
                       ))}
@@ -751,7 +769,7 @@ export function ManageTournamentPage() {
                       </Avatar>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium">{p.player?.username}</p>
+                          <p className="text-sm font-semibold text-foreground">{p.team_id ? p.team?.name : p.player?.username}</p>
                           {playerPlacements[p.player_id] && (
                             <span
                               className={`text-[10px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5 border
@@ -770,7 +788,7 @@ export function ManageTournamentPage() {
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {p.player?.wallet_address ? `Wallet: ${p.player.wallet_address.slice(0,12)}...` : 'No wallet connected'}
+                          {p.team_id ? `Captain: ${p.player?.username} · ` : ''}{p.player?.wallet_address ? `Wallet: ${p.player.wallet_address.slice(0,12)}...` : 'No wallet connected'}
                         </p>
                       </div>
                       <Button
@@ -810,7 +828,7 @@ export function ManageTournamentPage() {
       <Dialog open={prizeDialogOpen} onOpenChange={setPrizeDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Send Prize to {prizeTarget?.player?.username}</DialogTitle>
+            <DialogTitle>Send Prize to {prizeTarget?.team_id ? prizeTarget.team?.name : prizeTarget?.player?.username}</DialogTitle>
           </DialogHeader>
           <div className="py-3 space-y-4">
             <div className="space-y-1.5">
@@ -967,7 +985,9 @@ export function ManageTournamentPage() {
                 <SelectTrigger><SelectValue placeholder="Select player" /></SelectTrigger>
                 <SelectContent>
                   {verifiedPlayers.map((p) => (
-                    <SelectItem key={p.player_id} value={p.player_id}>{p.player?.username}</SelectItem>
+                    <SelectItem key={p.player_id} value={p.player_id}>
+                      {p.team_id ? `${p.team?.name} (Capt. ${p.player?.username})` : p.player?.username}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -978,7 +998,9 @@ export function ManageTournamentPage() {
                 <SelectTrigger><SelectValue placeholder="Select player" /></SelectTrigger>
                 <SelectContent>
                   {verifiedPlayers.filter((p) => p.player_id !== newMatchP1).map((p) => (
-                    <SelectItem key={p.player_id} value={p.player_id}>{p.player?.username}</SelectItem>
+                    <SelectItem key={p.player_id} value={p.player_id}>
+                      {p.team_id ? `${p.team?.name} (Capt. ${p.player?.username})` : p.player?.username}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1000,7 +1022,7 @@ export function ManageTournamentPage() {
   )
 }
 
-function MatchRow({ match, onSetWinner }: { match: Match; onSetWinner: (id: string) => void }) {
+function MatchRow({ match, teamNamesMap, onSetWinner }: { match: Match; teamNamesMap: Record<string, string>; onSetWinner: (id: string) => void }) {
   return (
     <Card>
       <CardContent className="p-4">
@@ -1011,12 +1033,14 @@ function MatchRow({ match, onSetWinner }: { match: Match; onSetWinner: (id: stri
         <div className="flex items-center gap-3">
           <PlayerSlot
             profile={match.player_one_profile}
+            teamName={teamNamesMap[match.player_one]}
             isWinner={match.winner === match.player_one}
             isCompleted={match.match_status === 'completed'}
           />
           <span className="text-muted-foreground text-xs font-medium">vs</span>
           <PlayerSlot
             profile={match.player_two_profile}
+            teamName={teamNamesMap[match.player_two]}
             isWinner={match.winner === match.player_two}
             isCompleted={match.match_status === 'completed'}
           />
@@ -1026,18 +1050,18 @@ function MatchRow({ match, onSetWinner }: { match: Match; onSetWinner: (id: stri
             <Button
               size="sm"
               variant="outline"
-              className="flex-1 text-xs"
+              className="flex-1 text-xs font-semibold"
               onClick={() => onSetWinner(match.player_one)}
             >
-              {match.player_one_profile?.username ?? 'P1'} wins
+              {teamNamesMap[match.player_one] || match.player_one_profile?.username || 'P1'} wins
             </Button>
             <Button
               size="sm"
               variant="outline"
-              className="flex-1 text-xs"
+              className="flex-1 text-xs font-semibold"
               onClick={() => onSetWinner(match.player_two)}
             >
-              {match.player_two_profile?.username ?? 'P2'} wins
+              {teamNamesMap[match.player_two] || match.player_two_profile?.username || 'P2'} wins
             </Button>
           </div>
         )}
@@ -1046,7 +1070,17 @@ function MatchRow({ match, onSetWinner }: { match: Match; onSetWinner: (id: stri
   )
 }
 
-function PlayerSlot({ profile, isWinner, isCompleted }: { profile?: { username: string; avatar?: string | null } | null; isWinner: boolean; isCompleted: boolean }) {
+function PlayerSlot({
+  profile,
+  teamName,
+  isWinner,
+  isCompleted,
+}: {
+  profile?: { username: string; avatar?: string | null } | null
+  teamName?: string
+  isWinner: boolean
+  isCompleted: boolean
+}) {
   return (
     <div className={`flex items-center gap-2 flex-1 p-2 rounded-lg ${isCompleted && isWinner ? 'bg-green-50 border border-green-200' : 'bg-muted/30'}`}>
       <Avatar className="h-6 w-6">
@@ -1054,7 +1088,7 @@ function PlayerSlot({ profile, isWinner, isCompleted }: { profile?: { username: 
         <AvatarFallback className="text-[10px]">{profile?.username?.slice(0,2).toUpperCase() ?? '?'}</AvatarFallback>
       </Avatar>
       <span className={`text-sm truncate ${isWinner ? 'font-semibold text-green-700' : ''}`}>
-        {profile?.username ?? 'TBD'}
+        {teamName || profile?.username || 'TBD'}
       </span>
       {isCompleted && isWinner && <Trophy className="h-3.5 w-3.5 text-brand-600 ml-auto shrink-0" />}
     </div>
