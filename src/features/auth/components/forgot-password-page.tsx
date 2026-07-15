@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Sword, ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { authService } from '@/services/auth.service'
 import { toast } from '@/hooks/use-toast'
+import logoImg from '@/assets/NexBaseLogo.png'
 
 const schema = z.object({ email: z.string().email('Enter a valid email') })
 type FormData = z.infer<typeof schema>
@@ -39,10 +40,8 @@ export function ForgotPasswordPage() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="flex items-center justify-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-brand flex items-center justify-center">
-            <Sword className="w-5 h-5 text-white" strokeWidth={2.5} />
-          </div>
-          <span className="text-xl font-bold tracking-tight">ChainArena</span>
+          <img src={logoImg} alt="NexBase Logo" className="w-9 h-9 rounded-xl object-cover shadow-sm" />
+          <span className="text-xl font-bold tracking-tight text-foreground">NexBase</span>
         </div>
 
         <Card>

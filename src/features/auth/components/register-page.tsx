@@ -3,13 +3,14 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Eye, EyeOff, Sword } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { authService } from '@/services/auth.service'
 import { toast } from '@/hooks/use-toast'
+import logoImg from '@/assets/NexBaseLogo.png'
 
 const schema = z
   .object({
@@ -81,16 +82,14 @@ export function RegisterPage() {
       <div className="w-full max-w-md space-y-6">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-brand flex items-center justify-center">
-            <Sword className="w-5 h-5 text-white" strokeWidth={2.5} />
-          </div>
-          <span className="text-xl font-bold tracking-tight">ChainArena</span>
+          <img src={logoImg} alt="NexBase Logo" className="w-9 h-9 rounded-xl object-cover shadow-sm" />
+          <span className="text-xl font-bold tracking-tight text-foreground">NexBase</span>
         </div>
 
         <Card>
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-xl">Create an account</CardTitle>
-            <CardDescription>Join ChainArena to compete or host tournaments</CardDescription>
+            <CardDescription>Join NexBase to compete or host tournaments</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
