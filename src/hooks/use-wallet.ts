@@ -117,6 +117,7 @@ export function useSolanaWallet() {
     async (
       tournamentId: string,
       winnerAddress: string,
+      amount: number,
       tokenType: 'SOL' | 'USDC'
     ): Promise<string> => {
       if (!wallet.publicKey || !wallet.signTransaction) {
@@ -133,6 +134,7 @@ export function useSolanaWallet() {
           vaultKeypair,
           winnerAddress,
           USDC_MINT,
+          amount,
           wallet.publicKey
         )
       } else {
@@ -140,15 +142,17 @@ export function useSolanaWallet() {
           connection,
           vaultKeypair,
           winnerAddress,
+          amount,
           wallet.publicKey
         )
       }
 
-      // Partially sign with the derived vault keypair
-      tx.partialSign(vaultKeypair)
-
-      // Sign with the connected organizer wallet (who is the fee payer)
+      // Sign with the connected organizer wallet (who is the fee payer) first
       const signed = await wallet.signTransaction(tx)
+
+      // Partially sign with the derived vault keypair after web wallet signs
+      signed.partialSign(vaultKeypair)
+
       const signature = await connection.sendRawTransaction(signed.serialize())
 
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
@@ -231,11 +235,12 @@ export function useSolanaWallet() {
         )
       }
 
-      // Partially sign with the vault
-      tx.partialSign(vaultKeypair)
-
-      // Sign with organizer fee payer
+      // Sign with organizer fee payer first
       const signed = await wallet.signTransaction(tx)
+
+      // Partially sign with the vault after web wallet signs
+      signed.partialSign(vaultKeypair)
+
       const signature = await connection.sendRawTransaction(signed.serialize())
 
       const { lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')

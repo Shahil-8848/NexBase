@@ -30,13 +30,13 @@ export async function getTournamentVaultKeypair(tournamentId: string): Promise<K
 }
 
 /**
- * Builds a transaction to payout all SOL held in the tournament vault to the winner.
- * The transaction fees are paid by the vault itself (deducted from balance).
+ * Builds a transaction to payout a specific amount of SOL held in the tournament vault to the winner.
  */
 export async function createSolEscrowPayoutTx(
   connection: Connection,
   vaultKeypair: Keypair,
   winnerAddress: string,
+  amount: number, // in SOL
   feePayer: PublicKey
 ): Promise<Transaction> {
   const winnerPubkey = new PublicKey(winnerAddress)
@@ -44,21 +44,14 @@ export async function createSolEscrowPayoutTx(
 
   // Get current vault balance
   const balance = await connection.getBalance(vaultPubkey)
-  if (balance === 0) {
-    throw new Error('Vault has 0 SOL balance.')
+  const transferAmount = Math.round(amount * LAMPORTS_PER_SOL)
+
+  if (balance < transferAmount) {
+    throw new Error(`Vault balance (${balance / LAMPORTS_PER_SOL} SOL) is less than the prize amount (${amount} SOL).`)
   }
 
   // Get latest blockhash
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
-
-  // Calculate rent-exempt minimum for system account (should be 0 since we can empty it)
-  // Let's leave a tiny fraction of SOL (0.00001 SOL) to cover the tx fee
-  const feeEstimate = 5000 // 5000 lamports is standard Solana signature fee
-  const transferAmount = balance - feeEstimate
-
-  if (transferAmount <= 0) {
-    throw new Error('Vault balance is too low to cover transaction fees.')
-  }
+  const { blockhash } = await connection.getLatestBlockhash('confirmed')
 
   const tx = new Transaction({
     recentBlockhash: blockhash,
@@ -75,14 +68,14 @@ export async function createSolEscrowPayoutTx(
 }
 
 /**
- * Builds a transaction to payout USDC held in the tournament vault to the winner's token account.
- * Since USDC is an SPL Token, the vault token account is emptied. The fee payer (organizer) covers the SOL fee.
+ * Builds a transaction to payout a specific amount of USDC held in the tournament vault to the winner's token account.
  */
 export async function createUsdcEscrowPayoutTx(
   connection: Connection,
   vaultKeypair: Keypair,
   winnerAddress: string,
   usdcMintAddress: string,
+  amount: number, // in USDC
   feePayer: PublicKey
 ): Promise<Transaction> {
   const winnerPubkey = new PublicKey(winnerAddress)
@@ -116,11 +109,13 @@ export async function createUsdcEscrowPayoutTx(
 
   // Get vault token balance
   const tokenAccountInfo = await connection.getTokenAccountBalance(vaultAta)
-  const amount = tokenAccountInfo.value.amount
+  const vaultAmountStr = tokenAccountInfo.value.amount
   const decimals = tokenAccountInfo.value.decimals
 
-  if (Number(amount) === 0) {
-    throw new Error('USDC Vault has 0 balance.')
+  const transferAmountUnits = Math.round(amount * Math.pow(10, decimals))
+
+  if (BigInt(vaultAmountStr) < BigInt(transferAmountUnits)) {
+    throw new Error(`USDC Vault balance (${tokenAccountInfo.value.uiAmount} USDC) is less than the prize amount (${amount} USDC).`)
   }
 
   // Add token transfer instruction from vault to winner
@@ -130,7 +125,7 @@ export async function createUsdcEscrowPayoutTx(
       mintPubkey,
       winnerAta,
       vaultPubkey,
-      BigInt(amount),
+      BigInt(transferAmountUnits),
       decimals
     )
   )

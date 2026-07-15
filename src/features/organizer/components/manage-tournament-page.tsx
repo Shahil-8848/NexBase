@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -41,6 +41,10 @@ export function ManageTournamentPage() {
   const [prizeDescription, setPrizeDescription] = useState('1st Place Winner')
   const [customDescription, setCustomDescription] = useState('')
   const [matchDialogOpen, setMatchDialogOpen] = useState(false)
+  const [payoutSource, setPayoutSource] = useState<'vault' | 'direct'>('vault')
+  const [vaultBalance, setVaultBalance] = useState<number | null>(null)
+  const [isLoadingVaultBalance, setIsLoadingVaultBalance] = useState(false)
+
   const [newMatchRound, setNewMatchRound] = useState('1')
   const [newMatchP1, setNewMatchP1] = useState('')
   const [newMatchP2, setNewMatchP2] = useState('')
@@ -50,6 +54,32 @@ export function ManageTournamentPage() {
     queryFn: () => tournamentService.getTournamentById(id!),
     enabled: !!id,
   })
+
+  useEffect(() => {
+    if (prizeDialogOpen && tournament?.vault_address) {
+      setIsLoadingVaultBalance(true)
+      solanaService.getBalance(tournament.vault_address)
+        .then((bal) => {
+          setVaultBalance(bal)
+          if (bal < Number(prizeAmount || 0.0001)) {
+            setPayoutSource('direct')
+          } else {
+            setPayoutSource('vault')
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to get vault balance:', err)
+          setVaultBalance(0)
+          setPayoutSource('direct')
+        })
+        .finally(() => {
+          setIsLoadingVaultBalance(false)
+        })
+    } else {
+      setVaultBalance(null)
+      setPayoutSource('direct')
+    }
+  }, [prizeDialogOpen, tournament?.vault_address])
 
   const { data: participants, refetch: refetchParticipants } = useQuery({
     queryKey: ['participants', id],
@@ -190,17 +220,19 @@ export function ManageTournamentPage() {
       participant,
       amount,
       description,
+      source,
     }: {
       participant: Participant
       amount: number
       description: string
+      source: 'vault' | 'direct'
     }) => {
       if (!participant.player?.wallet_address) throw new Error('Player has no wallet connected')
       
       let sig: string
-      if (tournament?.vault_address) {
+      if (tournament?.vault_address && source === 'vault') {
         // Decentralized Vault Payout
-        sig = await payoutTournament(id!, participant.player.wallet_address, tournament.token_type)
+        sig = await payoutTournament(id!, participant.player.wallet_address, amount, tournament.token_type)
       } else {
         // Direct Transfer Payout
         sig = await sendPayment(participant.player.wallet_address, amount, tournament!.token_type)
@@ -541,6 +573,49 @@ export function ManageTournamentPage() {
               </div>
             )}
 
+            {tournament.vault_address && (
+              <div className="space-y-2">
+                <Label>Payout Method</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPayoutSource('vault')}
+                    disabled={vaultBalance !== null && vaultBalance < Number(prizeAmount)}
+                    className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 text-sm font-medium transition-colors gap-1
+                      ${payoutSource === 'vault'
+                        ? 'border-brand bg-brand/5 text-brand-700'
+                        : 'border-input hover:border-muted-foreground/40'
+                      } ${vaultBalance !== null && vaultBalance < Number(prizeAmount) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <Shield className="h-4 w-4" />
+                    <span>Smart Escrow</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {isLoadingVaultBalance ? 'Loading...' : `Vault Bal: ${vaultBalance !== null ? formatSOL(vaultBalance, 2, tournament.token_type) : '0'}`}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPayoutSource('direct')}
+                    className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 text-sm font-medium transition-colors gap-1
+                      ${payoutSource === 'direct'
+                        ? 'border-brand bg-brand/5 text-brand-700'
+                        : 'border-input hover:border-muted-foreground/40'
+                      }`}
+                  >
+                    <Send className="h-4 w-4" />
+                    <span>Direct Wallet</span>
+                    <span className="text-[10px] text-muted-foreground">Pays from your wallet</span>
+                  </button>
+                </div>
+
+                {vaultBalance !== null && vaultBalance < Number(prizeAmount) && (
+                  <p className="text-[11px] text-amber-600 font-medium flex items-center gap-1">
+                    ⚠️ Escrow vault has insufficient balance ({formatSOL(vaultBalance, 2, tournament.token_type)}). Must pay directly from your wallet.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="p-3 rounded-lg bg-muted/50 text-sm space-y-2">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Final Transfer Amount</span>
@@ -560,7 +635,7 @@ export function ManageTournamentPage() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              {tournament.vault_address
+              {tournament.vault_address && payoutSource === 'vault'
                 ? 'This will process an on-chain transfer FROM the escrow vault to the winner. Verify and sign in Phantom.'
                 : 'This will initiate a direct transfer from your wallet. Confirm in Phantom.'}
             </p>
@@ -581,6 +656,7 @@ export function ManageTournamentPage() {
                     prizeDescription === 'Custom'
                       ? customDescription || 'Custom Prize'
                       : prizeDescription,
+                  source: payoutSource,
                 })
               }
             >
