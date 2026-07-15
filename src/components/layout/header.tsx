@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { useAuthContext } from '@/app/auth-context'
 import { authService } from '@/services/auth.service'
 import { useSolanaWallet } from '@/hooks/use-wallet'
-import { truncateAddress } from '@/lib/utils'
+import { truncateAddress, getAvatarUrl } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 import { useTheme } from '@/app/theme-provider'
@@ -104,7 +104,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full" aria-label="User menu">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={profile?.avatar ?? undefined} />
+                <AvatarImage src={getAvatarUrl(profile?.avatar, profile?.username || '')} />
                 <AvatarFallback className="bg-brand/20 text-brand-700 text-xs font-bold">
                   {profile?.username?.slice(0, 2).toUpperCase() ?? 'U'}
                 </AvatarFallback>

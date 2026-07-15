@@ -27,7 +27,7 @@ import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Textarea } from '@/components/ui/textarea'
 import { formatSOL, formatDateTime } from '@/utils/format'
-import { truncateAddress, getSolanaExplorerUrl } from '@/lib/utils'
+import { truncateAddress, getSolanaExplorerUrl, getAvatarUrl } from '@/lib/utils'
 import { BracketView } from './bracket-view'
 import { USDC_MINT } from '@/constants'
 
@@ -279,7 +279,7 @@ export function TournamentDetailPage() {
                 <Card>
                   <CardContent className="p-4 flex items-center gap-3">
                     <Avatar className="h-9 w-9">
-                      <AvatarImage src={tournament.organizer.avatar ?? undefined} />
+                      <AvatarImage src={getAvatarUrl(tournament.organizer.avatar, tournament.organizer.username)} />
                       <AvatarFallback className="text-xs font-bold bg-brand/20 text-brand-700">
                         {tournament.organizer.username.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
@@ -307,7 +307,7 @@ export function TournamentDetailPage() {
                     <div key={p.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
                       <span className="text-sm text-muted-foreground w-5 text-center font-mono">{i + 1}</span>
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src={p.player?.avatar ?? undefined} />
+                        <AvatarImage src={getAvatarUrl(p.player?.avatar, p.player?.username || '')} />
                         <AvatarFallback className="text-xs bg-muted">
                           {p.player?.username?.slice(0, 2).toUpperCase()}
                         </AvatarFallback>

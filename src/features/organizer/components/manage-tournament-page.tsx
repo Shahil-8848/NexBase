@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Trophy, Users, CheckCircle, XCircle,
-  Send, Plus, Shield, Ban, RefreshCw, AlertTriangle
+  Send, Plus, Shield, Ban, RefreshCw, AlertTriangle, Crown
 } from 'lucide-react'
+import { getAvatarUrl } from '@/lib/utils'
 import { tournamentService } from '@/services/tournament.service'
 import { transactionService } from '@/services/transaction.service'
 import { governanceService, Dispute, Vote } from '@/services/governance.service'
@@ -253,7 +254,7 @@ export function ManageTournamentPage() {
       await supabase.from('badges').insert({
         player_id: participant.player_id,
         tournament_id: id!,
-        title: `Champion: ${tournament!.title}`,
+        title: `${description}: ${tournament!.title}`,
         image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=150&auto=format&fit=crop&q=60', // Premium trophy badge
         signature: sig,
       })
@@ -270,6 +271,177 @@ export function ManageTournamentPage() {
   })
 
   const verifiedPlayers = participants?.filter((p) => p.payment_status === 'verified') ?? []
+
+  // Update tournament status mutation (e.g. active, completed)
+  const updateStatusMutation = useMutation({
+    mutationFn: (status: Tournament['tournament_status']) =>
+      tournamentService.updateTournament(id!, { tournament_status: status }),
+    onSuccess: () => {
+      toast({ title: 'Tournament status updated' })
+      queryClient.invalidateQueries({ queryKey: ['tournament', id] })
+    },
+    onError: (err) => toast({ title: 'Update failed', description: (err as Error).message, variant: 'destructive' }),
+  })
+
+  // Helper to compute active players for any round
+  const getActivePlayersForRound = (R: number): string[] => {
+    if (!verifiedPlayers.length) return []
+    if (R === 1) {
+      return verifiedPlayers.map((p) => p.player_id)
+    }
+
+    const prevActive = getActivePlayersForRound(R - 1)
+    const prevMatches = matches?.filter((m) => m.round === R - 1) ?? []
+    const prevWinners = prevMatches.map((m) => m.winner).filter(Boolean) as string[]
+
+    const prevMatchedPlayers = new Set(
+      prevMatches.flatMap((m) => [m.player_one, m.player_two])
+    )
+    const prevByes = prevActive.filter((pId) => !prevMatchedPlayers.has(pId))
+
+    return [...prevWinners, ...prevByes]
+  }
+
+  // Generate matches for the next round mutation
+  const generateRoundMutation = useMutation({
+    mutationFn: async () => {
+      if (!verifiedPlayers.length) throw new Error('No verified players to match.')
+
+      const R = matches && matches.length > 0 ? Math.max(...matches.map((m) => m.round)) : 0
+
+      let activePlayerIds: string[] = []
+      if (R === 0) {
+        // Round 1
+        activePlayerIds = verifiedPlayers.map((p) => p.player_id)
+        // Shuffle players for fair pairings
+        activePlayerIds = [...activePlayerIds].sort(() => Math.random() - 0.5)
+      } else {
+        // Verify all matches in round R are completed
+        const roundMatches = matches!.filter((m) => m.round === R)
+        const pending = roundMatches.filter((m) => m.match_status !== 'completed')
+        if (pending.length > 0) {
+          throw new Error(`Please complete all matches of Round ${R} first.`)
+        }
+
+        // Get active players for round R + 1
+        activePlayerIds = getActivePlayersForRound(R + 1)
+      }
+
+      if (activePlayerIds.length <= 1) {
+        throw new Error('Tournament has already reached its final winner.')
+      }
+
+      // Create pairings
+      const nextRound = R + 1
+      const matchPromises = []
+
+      for (let i = 0; i < activePlayerIds.length; i += 2) {
+        if (i + 1 < activePlayerIds.length) {
+          matchPromises.push(
+            tournamentService.createMatch({
+              tournament_id: id!,
+              round: nextRound,
+              player_one: activePlayerIds[i],
+              player_two: activePlayerIds[i + 1],
+              winner: null,
+              match_status: 'pending',
+              scheduled_at: null,
+            })
+          )
+        }
+      }
+
+      await Promise.all(matchPromises)
+      return nextRound
+    },
+    onSuccess: (round) => {
+      toast({ title: `Round ${round} matches generated!` })
+      queryClient.invalidateQueries({ queryKey: ['matches', id] })
+    },
+    onError: (err) => {
+      toast({
+        title: 'Failed to generate round',
+        description: (err as Error).message,
+        variant: 'destructive',
+      })
+    },
+  })
+
+  // Get active players of the highest round
+  const nextActivePlayers = useMemo(() => {
+    if (!verifiedPlayers.length) return []
+    const R = matches && matches.length > 0 ? Math.max(...matches.map((m) => m.round)) : 0
+    if (R === 0) return verifiedPlayers.map((p) => p.player_id)
+    
+    // Check if the current round matches are completed
+    const roundMatches = matches!.filter((m) => m.round === R)
+    const isRoundCompleted = roundMatches.every((m) => m.match_status === 'completed')
+
+    if (isRoundCompleted) {
+      return getActivePlayersForRound(R + 1)
+    } else {
+      return getActivePlayersForRound(R)
+    }
+  }, [matches, verifiedPlayers])
+
+  // Get tournament winner if finals are completed
+  const tournamentWinner = useMemo(() => {
+    const R = matches && matches.length > 0 ? Math.max(...matches.map((m) => m.round)) : 0
+    if (R === 0) return null
+    const roundMatches = matches!.filter((m) => m.round === R)
+    const isRoundCompleted = roundMatches.every((m) => m.match_status === 'completed')
+
+    if (isRoundCompleted && nextActivePlayers.length === 1) {
+      return verifiedPlayers.find((p) => p.player_id === nextActivePlayers[0])?.player ?? null
+    }
+    return null
+  }, [matches, nextActivePlayers, verifiedPlayers])
+
+  // Group matches by round
+  const matchesByRound = useMemo(() => {
+    const grouped: Record<number, Match[]> = {}
+    matches?.forEach((m) => {
+      if (!grouped[m.round]) grouped[m.round] = []
+      grouped[m.round].push(m)
+    })
+    return grouped
+  }, [matches])
+
+  // Get placements (1st, 2nd, 3rd) based on single-elimination knockout results
+  const playerPlacements = useMemo(() => {
+    const placements: Record<string, { rank: number; label: string; badge: string }> = {}
+    if (!matches || matches.length === 0) return placements
+
+    const R_max = Math.max(...matches.map((m) => m.round))
+    const finalMatches = matches.filter((m) => m.round === R_max)
+
+    if (finalMatches.length === 1 && finalMatches[0].match_status === 'completed') {
+      const finalMatch = finalMatches[0]
+      const firstPlace = finalMatch.winner
+      const secondPlace = finalMatch.winner === finalMatch.player_one ? finalMatch.player_two : finalMatch.player_one
+
+      if (firstPlace) {
+        placements[firstPlace] = { rank: 1, label: '1st Place Winner', badge: 'Champion' }
+      }
+      if (secondPlace) {
+        placements[secondPlace] = { rank: 2, label: '2nd Place Runner-Up', badge: '2nd Place' }
+      }
+
+      if (R_max > 1) {
+        const semifinalMatches = matches.filter((m) => m.round === R_max - 1)
+        semifinalMatches.forEach((m) => {
+          if (m.match_status === 'completed') {
+            const loser = m.winner === m.player_one ? m.player_two : m.player_one
+            if (loser) {
+              placements[loser] = { rank: 3, label: '3rd Place Winner', badge: '3rd Place' }
+            }
+          }
+        })
+      }
+    }
+
+    return placements
+  }, [matches])
 
   if (isLoading) return (
     <div className="space-y-4">
@@ -304,6 +476,27 @@ export function ManageTournamentPage() {
           <p className="text-muted-foreground">{tournament.game}</p>
         </div>
         <div className="flex gap-2">
+          {tournament.tournament_status === 'registration' && (
+            <Button
+              size="sm"
+              disabled={verifiedPlayers.length < 2 || updateStatusMutation.isPending}
+              loading={updateStatusMutation.isPending}
+              onClick={() => updateStatusMutation.mutate('active')}
+              className="bg-brand text-white hover:bg-brand/90 gap-1.5"
+            >
+              <Trophy className="h-4 w-4" /> Start Tournament
+            </Button>
+          )}
+          {tournament.tournament_status === 'active' && tournamentWinner && (
+            <Button
+              size="sm"
+              loading={updateStatusMutation.isPending}
+              onClick={() => updateStatusMutation.mutate('completed')}
+              className="bg-green-600 text-white hover:bg-green-700 gap-1.5"
+            >
+              <CheckCircle className="h-4 w-4" /> Complete Tournament
+            </Button>
+          )}
           {tournament.tournament_status !== 'completed' && !isCancelled && (
             <Button
               variant="outline"
@@ -361,7 +554,7 @@ export function ManageTournamentPage() {
                   {participants.map((p) => (
                     <div key={p.id} className="flex items-center gap-3 px-4 py-3">
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src={p.player?.avatar ?? undefined} />
+                        <AvatarImage src={getAvatarUrl(p.player?.avatar, p.player?.username || '')} />
                         <AvatarFallback className="text-xs">{p.player?.username?.slice(0,2).toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
@@ -419,28 +612,98 @@ export function ManageTournamentPage() {
         </TabsContent>
 
         {/* Matches tab */}
-        <TabsContent value="matches" className="mt-4 space-y-3">
-          <div className="flex justify-end">
-            <Button size="sm" className="gap-2" onClick={() => setMatchDialogOpen(true)} disabled={verifiedPlayers.length < 2}>
-              <Plus className="h-4 w-4" /> Add Match
-            </Button>
-          </div>
+        <TabsContent value="matches" className="mt-4 space-y-4">
+          {/* Bracket Actions & Status Banner */}
+          <Card className="border border-brand/10 bg-brand/5">
+            <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h4 className="font-semibold text-sm flex items-center gap-1.5">
+                  <Shield className="h-4 w-4 text-brand" />
+                  Bracket Management
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  {tournament.tournament_status !== 'active'
+                    ? 'Matches can only be generated when the tournament is active (Start Tournament above).'
+                    : tournamentWinner
+                    ? `🏆 Tournament complete! Champion is ${tournamentWinner.username}.`
+                    : matches && matches.length > 0
+                    ? `Round ${Math.max(...matches.map(m => m.round))} matches are in progress.`
+                    : 'Pair verified players into the opening matches of Round 1.'}
+                </p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                {tournament.tournament_status === 'active' && !tournamentWinner && (
+                  <Button
+                    size="sm"
+                    className="gap-1.5"
+                    loading={generateRoundMutation.isPending}
+                    onClick={() => generateRoundMutation.mutate()}
+                  >
+                    <Plus className="h-4 w-4" />
+                    {matches && matches.length > 0 ? 'Generate Next Round' : 'Generate Round 1 Bracket'}
+                  </Button>
+                )}
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setMatchDialogOpen(true)} disabled={verifiedPlayers.length < 2}>
+                  <Plus className="h-4 w-4" /> Add Match Manually
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tournament Winner Announcement */}
+          {tournamentWinner && (
+            <div className="p-4 rounded-xl border border-green-200 bg-green-50/50 flex flex-col items-center justify-center text-center space-y-2">
+              <Trophy className="h-10 w-10 text-yellow-500 animate-bounce" />
+              <div>
+                <h3 className="font-bold text-lg text-green-900">Tournament Complete!</h3>
+                <p className="text-sm text-green-700">
+                  Winner: <span className="font-bold text-green-900">{tournamentWinner.username}</span>
+                </p>
+              </div>
+              {tournament.tournament_status === 'active' && (
+                <Button
+                  size="sm"
+                  onClick={() => updateStatusMutation.mutate('completed')}
+                  className="bg-green-600 hover:bg-green-700 text-white mt-1"
+                >
+                  Mark Tournament Completed
+                </Button>
+              )}
+            </div>
+          )}
 
           {!matches?.length ? (
             <EmptyState
               icon={<Trophy className="h-8 w-8" />}
-              title="No matches set up"
-              description="Add matches once you have enough verified players"
+              title="No matches generated yet"
+              description="Start the tournament and generate the bracket pairings to play matches."
             />
           ) : (
-            <div className="space-y-2">
-              {matches.map((match) => (
-                <MatchRow
-                  key={match.id}
-                  match={match}
-                  onSetWinner={(winnerId) => setWinnerMutation.mutate({ matchId: match.id, winnerId })}
-                />
-              ))}
+            <div className="space-y-6">
+              {Object.keys(matchesByRound).sort((a,b) => Number(a) - Number(b)).map((roundStr) => {
+                const roundNum = Number(roundStr)
+                const roundMatches = matchesByRound[roundNum]
+                return (
+                  <div key={roundNum} className="space-y-2">
+                    <div className="flex items-center gap-2 border-b pb-1.5">
+                      <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5 px-1">
+                        <Trophy className="h-4 w-4 text-brand" />
+                        Round {roundNum}
+                      </h3>
+                      <span className="text-xs text-muted-foreground">({roundMatches.length} matches)</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {roundMatches.map((match) => (
+                        <MatchRow
+                          key={match.id}
+                          match={match}
+                          onSetWinner={(winnerId) => setWinnerMutation.mutate({ matchId: match.id, winnerId })}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </TabsContent>
@@ -483,11 +746,29 @@ export function ManageTournamentPage() {
                   {verifiedPlayers.map((p) => (
                     <div key={p.id} className="flex items-center gap-3 p-3 rounded-lg border">
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src={p.player?.avatar ?? undefined} />
+                        <AvatarImage src={getAvatarUrl(p.player?.avatar, p.player?.username || '')} />
                         <AvatarFallback className="text-xs">{p.player?.username?.slice(0,2).toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
-                        <p className="text-sm font-medium">{p.player?.username}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">{p.player?.username}</p>
+                          {playerPlacements[p.player_id] && (
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5 border
+                                ${playerPlacements[p.player_id].rank === 1
+                                  ? 'bg-yellow-50 text-yellow-800 border-yellow-200'
+                                  : playerPlacements[p.player_id].rank === 2
+                                  ? 'bg-slate-50 text-slate-800 border-slate-200'
+                                  : 'bg-amber-50/50 text-amber-800 border-amber-100'
+                                }`}
+                            >
+                              {playerPlacements[p.player_id].rank === 1 && (
+                                <Crown className="h-3 w-3 text-yellow-500 fill-yellow-400 mr-0.5" />
+                              )}
+                              {playerPlacements[p.player_id].badge}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           {p.player?.wallet_address ? `Wallet: ${p.player.wallet_address.slice(0,12)}...` : 'No wallet connected'}
                         </p>
@@ -498,7 +779,12 @@ export function ManageTournamentPage() {
                         onClick={() => {
                           setPrizeTarget(p)
                           setPrizeAmount(String(remainingPrizePool))
-                          setPrizeDescription('1st Place Winner')
+                          const placement = playerPlacements[p.player_id]
+                          if (placement) {
+                            setPrizeDescription(placement.label)
+                          } else {
+                            setPrizeDescription('1st Place Winner')
+                          }
                           setCustomDescription('')
                           setPrizeDialogOpen(true)
                         }}
@@ -764,7 +1050,7 @@ function PlayerSlot({ profile, isWinner, isCompleted }: { profile?: { username: 
   return (
     <div className={`flex items-center gap-2 flex-1 p-2 rounded-lg ${isCompleted && isWinner ? 'bg-green-50 border border-green-200' : 'bg-muted/30'}`}>
       <Avatar className="h-6 w-6">
-        <AvatarImage src={profile?.avatar ?? undefined} />
+        <AvatarImage src={getAvatarUrl(profile?.avatar, profile?.username ?? 'TBD')} />
         <AvatarFallback className="text-[10px]">{profile?.username?.slice(0,2).toUpperCase() ?? '?'}</AvatarFallback>
       </Avatar>
       <span className={`text-sm truncate ${isWinner ? 'font-semibold text-green-700' : ''}`}>

@@ -75,3 +75,8 @@ export function formatRelativeTime(date: string | Date): string {
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
+
+export function getAvatarUrl(avatarUrl: string | null | undefined, username: string): string {
+  if (avatarUrl && avatarUrl.trim() !== '') return avatarUrl
+  return `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(username || 'player')}`
+}

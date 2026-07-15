@@ -3,7 +3,7 @@ import type { Match } from '@/types'
 import { EmptyState } from '@/components/shared/empty-state'
 import { MatchStatusBadge } from '@/components/shared/tournament-status-badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { cn } from '@/lib/utils'
+import { cn, getAvatarUrl } from '@/lib/utils'
 
 interface BracketViewProps {
   matches: Match[]
@@ -86,7 +86,7 @@ function PlayerRow({
       isCompleted && !isWinner && 'opacity-50',
     )}>
       <Avatar className="h-5 w-5">
-        <AvatarImage src={profile?.avatar ?? undefined} />
+        <AvatarImage src={getAvatarUrl(profile?.avatar, profile?.username ?? 'TBD')} />
         <AvatarFallback className="text-[10px]">
           {profile?.username?.slice(0, 2).toUpperCase() ?? '?'}
         </AvatarFallback>

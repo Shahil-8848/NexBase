@@ -20,6 +20,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 import { formatSOL, formatRelative } from '@/utils/format'
 import { truncateAddress } from '@/lib/utils'
+import targetIcon from '@/assets/3d-target.png'
+import solCoinIcon from '@/assets/SOL_COIN.png'
 
 export function DashboardPage() {
   const { profile, isOrganizer } = useAuthContext()
@@ -112,8 +114,8 @@ export function DashboardPage() {
           label="Total Earnings"
           value={formatSOL(totalEarnings)}
           trend="up"
-          icon={<DollarSign className="h-5 w-5 text-green-500" />}
-          iconBg="bg-green-500/10"
+          icon={<img src={solCoinIcon} alt="Total Earnings" className="h-10 w-10 object-contain" />}
+          iconBg=""
           loading={txLoading}
         />
         <StatCard
@@ -126,8 +128,8 @@ export function DashboardPage() {
         <StatCard
           label="Open Tournaments"
           value={tournamentsData?.total ?? 0}
-          icon={<Trophy className="h-5 w-5 text-primary" />}
-          iconBg="bg-primary/10"
+          icon={<img src={targetIcon} alt="Open Tournaments" className="h-10 w-10 object-contain" />}
+          iconBg=""
           loading={toursLoading}
         />
         <StatCard

@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatSOL } from '@/utils/format'
+import { getAvatarUrl } from '@/lib/utils'
 import { useDebounce } from '@/hooks/use-debounce'
 import type { Profile } from '@/types'
 
@@ -110,7 +111,7 @@ export function LeaderboardPage() {
                 <Card className="text-center hover:shadow-md transition-shadow">
                   <CardContent className={`p-3 flex flex-col items-center justify-end ${heights[i]}`}>
                     <Avatar className="h-10 w-10 mb-2">
-                      <AvatarImage src={row.profile.avatar ?? undefined} />
+                      <AvatarImage src={getAvatarUrl(row.profile.avatar, row.profile.username)} />
                       <AvatarFallback className="text-xs font-bold">
                         {row.profile.username.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
@@ -167,7 +168,7 @@ export function LeaderboardPage() {
                     <td className="px-4 py-3">
                       <Link to={`/profile/${row.profile.id}`} className="flex items-center gap-2.5 hover:underline">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={row.profile.avatar ?? undefined} />
+                          <AvatarImage src={getAvatarUrl(row.profile.avatar, row.profile.username)} />
                           <AvatarFallback className="text-xs font-bold bg-brand/20 text-brand-700">
                             {row.profile.username.slice(0, 2).toUpperCase()}
                           </AvatarFallback>

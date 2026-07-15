@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { formatSOL, formatRelative } from '@/utils/format'
+import { getAvatarUrl } from '@/lib/utils'
 import type { Profile } from '@/types'
 
 async function getProfileById(id: string): Promise<Profile | null> {
@@ -83,7 +84,7 @@ export function ProfilePage() {
           <Card>
             <CardContent className="p-6 text-center space-y-4">
               <Avatar className="h-20 w-20 mx-auto">
-                <AvatarImage src={profile.avatar ?? undefined} />
+                <AvatarImage src={getAvatarUrl(profile.avatar, profile.username)} />
                 <AvatarFallback className="text-2xl font-bold bg-brand/20 text-brand-700">
                   {profile.username.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
