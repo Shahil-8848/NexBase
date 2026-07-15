@@ -14,7 +14,6 @@ export function SwapPage() {
     const initJupiter = () => {
       const win = window as any
       if (win.Jupiter && !initialized.current) {
-        console.log('Initializing Jupiter Terminal...')
         win.Jupiter.init({
           displayMode: 'integrated',
           integratedTargetId: 'integrated-terminal',

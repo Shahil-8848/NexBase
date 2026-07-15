@@ -40,7 +40,6 @@ export function WalletConnectionProvider({ children }: WalletConnectionProviderP
       errorMsg.includes('cancel') ||
       errorMsg.includes('declined')
     ) {
-      console.log('Wallet connection/request rejected by user.')
       return
     }
 

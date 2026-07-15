@@ -158,7 +158,6 @@ export const solanaService = {
         blockTime: tx.blockTime ?? null,
       }
     } catch (err) {
-      console.error('Transaction verification error:', err)
       return null
     }
   },

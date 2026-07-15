@@ -28,6 +28,7 @@ export const transactionService = {
     const { data, error } = await supabase
       .from('transactions')
       .select('*, tournament:tournaments(id,title,game,organizer_id)')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
     if (error) throw error
     return (data ?? []) as Transaction[]

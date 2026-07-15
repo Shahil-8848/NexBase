@@ -52,7 +52,7 @@ export function CreateTournamentPage() {
         return JSON.parse(saved)
       }
     } catch (e) {
-      console.error(e)
+      // Ignore
     }
     return {
       max_players: 16,

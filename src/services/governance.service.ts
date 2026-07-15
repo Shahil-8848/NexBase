@@ -35,7 +35,6 @@ export const governanceService = {
       .maybeSingle()
 
     if (error) {
-      console.error('Error fetching dispute:', error)
       return null
     }
     return data as Dispute | null
@@ -113,7 +112,6 @@ export const governanceService = {
       .eq('dispute_id', disputeId)
 
     if (error) {
-      console.error('Error fetching dispute votes:', error)
       return []
     }
     return data as Vote[]

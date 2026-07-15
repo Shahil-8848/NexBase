@@ -69,7 +69,6 @@ export function ManageTournamentPage() {
           }
         })
         .catch((err) => {
-          console.error('Failed to get vault balance:', err)
           setVaultBalance(0)
           setPayoutSource('direct')
         })

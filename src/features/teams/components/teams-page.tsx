@@ -118,7 +118,7 @@ export function TeamsPage() {
       const filtered = results.filter((p) => !memberIds.has(p.id) && !invitedIds.has(p.id))
       setSearchResults(filtered)
     } catch (err) {
-      console.error(err)
+      // Ignore
     }
   }
 

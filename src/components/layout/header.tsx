@@ -32,13 +32,12 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
   useEffect(() => {
     if (profile && connected && address && profile.wallet_address !== address) {
-      console.log('Auto-linking connected wallet to user profile:', address)
       authService.updateProfile(profile.id, { wallet_address: address })
         .then(() => {
           refreshProfile()
         })
         .catch((err) => {
-          console.error('Failed to auto-link wallet:', err)
+          // Ignore
         })
     }
   }, [profile, connected, address, refreshProfile])

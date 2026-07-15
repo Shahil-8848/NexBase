@@ -49,26 +49,21 @@ export function RegisterPage() {
   const role = watch('role')
 
   const onSubmit = async ({ email, password, username, role }: FormData) => {
-    console.log('[RegisterPage.onSubmit] → form submitted', { email, username, role })
     try {
       const result = await authService.signUp({ email, password, username, role })
-      console.log('[RegisterPage.onSubmit] ← signUp result', result)
 
       if (result.session) {
-        console.log('[RegisterPage.onSubmit] ✅ session exists → redirecting to /dashboard')
         toast({ title: 'Account created!', description: 'Welcome to ChainArena.' })
         navigate('/dashboard', { replace: true })
         return
       }
 
-      console.warn('[RegisterPage.onSubmit] ⚠️ No session — email confirmation is ON, redirecting to login')
       toast({
         title: 'Account created!',
         description: 'Check your email and click the confirmation link, then sign in.',
       })
       navigate('/auth/login')
     } catch (err) {
-      console.error('[RegisterPage.onSubmit] ❌ caught error:', err)
       toast({
         title: 'Registration failed',
         description: err instanceof Error ? err.message : 'Something went wrong',
