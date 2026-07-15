@@ -8,6 +8,8 @@ import {
 import { tournamentService } from '@/services/tournament.service'
 import { transactionService } from '@/services/transaction.service'
 import { governanceService, Dispute, Vote } from '@/services/governance.service'
+import { solanaService } from '@/services/solana.service'
+import { USDC_MINT } from '@/constants'
 import { useAuthContext } from '@/app/auth-context'
 import { useSolanaWallet } from '@/hooks/use-wallet'
 import { supabase } from '@/lib/supabase'
@@ -71,8 +73,33 @@ export function ManageTournamentPage() {
   const remainingPrizePool = Math.max(0, totalPrizePool - prizesSent)
 
   const verifyPaymentMutation = useMutation({
-    mutationFn: ({ participantId, status }: { participantId: string; status: 'verified' | 'failed' }) =>
-      tournamentService.verifyParticipantPayment(participantId, status),
+    mutationFn: async ({ participant, status }: { participant: Participant; status: 'verified' | 'failed' }) => {
+      if (status === 'verified') {
+        // If the tournament has a fee, we must verify the transaction on-chain
+        if (tournament && tournament.entry_fee > 0) {
+          if (!participant.transaction_signature) {
+            throw new Error('No transaction signature submitted by player.')
+          }
+
+          const paymentDest = tournament.vault_address || tournament.organizer_wallet
+          if (!paymentDest) {
+            throw new Error('Tournament has no payment destination (organizer wallet or escrow vault) configured.')
+          }
+
+          const verified = await solanaService.verifyTransaction(
+            participant.transaction_signature,
+            paymentDest,
+            tournament.entry_fee,
+            tournament.token_type === 'USDC' ? USDC_MINT : undefined
+          )
+
+          if (!verified || !verified.confirmed) {
+            throw new Error('On-chain transaction verification failed. The transfer could not be found or amount/destination did not match.')
+          }
+        }
+      }
+      return tournamentService.verifyParticipantPayment(participant.id, status)
+    },
     onSuccess: () => {
       toast({ title: 'Payment status updated' })
       queryClient.invalidateQueries({ queryKey: ['participants', id] })
@@ -266,12 +293,13 @@ export function ManageTournamentPage() {
       </div>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
           { label: 'Players', value: `${tournament.current_players}/${tournament.max_players}` },
           { label: 'Verified', value: String(verifiedPlayers.length) },
           { label: 'Entry Fee', value: formatSOL(tournament.entry_fee, 4, tournament.token_type) },
           { label: 'Prize Pool', value: formatSOL(tournament.prize_pool, 2, tournament.token_type) },
+          { label: 'Collected Fees', value: formatSOL(tournament.collected_fees || 0, 2, tournament.token_type) },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="p-3 text-center">
@@ -322,7 +350,7 @@ export function ManageTournamentPage() {
                               size="icon"
                               variant="ghost"
                               className="h-7 w-7 text-green-600 hover:text-green-700"
-                              onClick={() => verifyPaymentMutation.mutate({ participantId: p.id, status: 'verified' })}
+                              onClick={() => verifyPaymentMutation.mutate({ participant: p, status: 'verified' })}
                               title="Verify payment"
                             >
                               <CheckCircle className="h-4 w-4" />
@@ -331,7 +359,7 @@ export function ManageTournamentPage() {
                               size="icon"
                               variant="ghost"
                               className="h-7 w-7 text-destructive hover:text-destructive/80"
-                              onClick={() => verifyPaymentMutation.mutate({ participantId: p.id, status: 'failed' })}
+                              onClick={() => verifyPaymentMutation.mutate({ participant: p, status: 'failed' })}
                               title="Reject payment"
                             >
                               <XCircle className="h-4 w-4" />

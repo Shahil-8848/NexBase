@@ -36,6 +36,7 @@ export interface Tournament {
   organizer_id: string
   entry_fee: number
   prize_pool: number
+  collected_fees: number
   max_players: number
   current_players: number
   tournament_status: TournamentStatus

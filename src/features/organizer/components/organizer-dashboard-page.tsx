@@ -59,6 +59,7 @@ export function OrganizerDashboardPage() {
     active: tournaments?.filter((t) => t.tournament_status === 'active').length ?? 0,
     totalPlayers: tournaments?.reduce((s, t) => s + t.current_players, 0) ?? 0,
     totalPrize: tournaments?.reduce((s, t) => s + Number(t.prize_pool), 0) ?? 0,
+    totalCollectedFees: tournaments?.reduce((s, t) => s + Number(t.collected_fees || 0), 0) ?? 0,
   }
 
   const nextStatus: Record<string, Tournament['tournament_status']> = {
@@ -87,11 +88,12 @@ export function OrganizerDashboardPage() {
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Total Tournaments" value={stats.total} icon={<Trophy className="h-5 w-5 text-brand-600" />} iconBg="bg-brand/10" loading={isLoading} />
         <StatCard label="Active Now" value={stats.active} icon={<BarChart3 className="h-5 w-5 text-blue-500" />} iconBg="bg-blue-50" loading={isLoading} />
         <StatCard label="Total Players" value={stats.totalPlayers} icon={<Users className="h-5 w-5 text-purple-500" />} iconBg="bg-purple-50" loading={isLoading} />
         <StatCard label="Total Prize Pool" value={formatSOL(stats.totalPrize)} icon={<DollarSign className="h-5 w-5 text-green-600" />} iconBg="bg-green-50" loading={isLoading} />
+        <StatCard label="Total Collected Fees" value={formatSOL(stats.totalCollectedFees)} icon={<DollarSign className="h-5 w-5 text-amber-600" />} iconBg="bg-amber-50" loading={isLoading} />
       </div>
 
       {/* Tournaments list */}

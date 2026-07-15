@@ -120,10 +120,14 @@ export const tournamentService = {
 
   // ─── Participants ───────────────────────────────────────────────────────────
 
-  async joinTournament(tournamentId: string, playerId: string): Promise<Participant> {
+  async joinTournament(
+    tournamentId: string,
+    playerId: string,
+    paymentStatus: 'pending' | 'verified' = 'pending'
+  ): Promise<Participant> {
     const { data, error } = await supabase
       .from('participants')
-      .insert({ tournament_id: tournamentId, player_id: playerId })
+      .insert({ tournament_id: tournamentId, player_id: playerId, payment_status: paymentStatus })
       .select()
       .single()
     if (error) throw error

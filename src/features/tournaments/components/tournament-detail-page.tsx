@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Trophy, Users, Calendar, Wallet, ExternalLink,
   CheckCircle2, Clock, Copy, ArrowLeft,
-  Shield, AlertTriangle, Vote as VoteIcon
+  Shield, AlertTriangle, Vote as VoteIcon, RefreshCw
 } from 'lucide-react'
 import { tournamentService } from '@/services/tournament.service'
 import { transactionService } from '@/services/transaction.service'
@@ -76,7 +76,7 @@ export function TournamentDetailPage() {
   const joinMutation = useMutation({
     mutationFn: async () => {
       if (!profile?.id || !id) throw new Error('Not authenticated')
-      return tournamentService.joinTournament(id, profile.id)
+      return tournamentService.joinTournament(id, profile.id, tournament!.entry_fee === 0 ? 'verified' : 'pending')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['participation', id, profile?.id] })
@@ -372,15 +372,31 @@ export function TournamentDetailPage() {
                     <PaymentStatusBadge status={participation.payment_status} />
                   </div>
                   {participation.transaction_signature && (
-                    <a
-                      href={getSolanaExplorerUrl(participation.transaction_signature)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      View on Explorer
-                    </a>
+                    <div className="flex flex-col gap-2">
+                      <a
+                        href={getSolanaExplorerUrl(participation.transaction_signature)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        View on Explorer
+                      </a>
+                      {participation.payment_status === 'pending' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full text-xs py-1 h-7 gap-1 mt-1"
+                          onClick={() => {
+                            setJoinDialogOpen(true)
+                            handleSubmitSignature(participation.transaction_signature)
+                          }}
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          Re-verify Payment
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -408,9 +424,22 @@ export function TournamentDetailPage() {
                   <Shield className="h-5 w-5 text-muted-foreground mx-auto" />
                 </div>
               ) : isRegistered ? (
-                <div className="flex items-center gap-2 text-sm text-green-600">
-                  <CheckCircle2 className="h-4 w-4" />
-                  You&apos;re registered
+                <div className="space-y-3 w-full">
+                  <div className="flex items-center gap-2 text-sm text-green-600">
+                    <CheckCircle2 className="h-4 w-4" />
+                    You&apos;re registered
+                  </div>
+                  {participation.payment_status !== 'verified' && (
+                    <Button
+                      className="w-full text-xs py-1.5 h-8 mt-1"
+                      onClick={() => {
+                        setJoinDialogOpen(true)
+                        setPayStep('paying')
+                      }}
+                    >
+                      {participation.transaction_signature ? 'Retry Payment' : 'Pay Entry Fee'}
+                    </Button>
+                  )}
                 </div>
               ) : tournament.tournament_status !== 'registration' ? (
                 <p className="text-sm text-muted-foreground text-center">Registration is closed</p>
